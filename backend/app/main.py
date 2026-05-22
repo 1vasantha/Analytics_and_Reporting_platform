@@ -50,10 +50,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    
-    # Rate limiting
-    app.add_middleware(RateLimitMiddleware)
-
     # Cors
     app.add_middleware(
     CORSMiddleware,
@@ -62,6 +58,9 @@ def create_app() -> FastAPI:
     allow_methods=["*"],
     allow_headers=["*"],
 )
+    
+    # Rate limiting
+    app.add_middleware(RateLimitMiddleware)
 
     # Routers
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
