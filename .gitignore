@@ -44,8 +44,8 @@ logs/
 *.tmp
 /tmp/
 
-*.yml
-*.yaml
-docker-compose.yaml
-docker-compose.yml
+# *.yml
+# *.yaml
+# docker-compose.yaml
+# docker-compose.yml
 

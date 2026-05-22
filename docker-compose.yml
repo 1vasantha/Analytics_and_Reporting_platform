@@ -1,0 +1,156 @@
+# Local development — `docker compose up`
+# (no version: key — it's deprecated in newer Compose)
+
+x-backend-env: &backend-env
+  PROJECT_NAME: "Analytics and Reporting Platform"
+  VERSION: "0.1.0"
+  API_V1_PREFIX: /api/v1
+  ENVIRONMENT: development
+  DEBUG: "true"
+  LOG_LEVEL: INFO
+  SECRET_KEY: XyqalpyxhytaabZZZ276d8w2abc91012qwxyz123
+  ALGORITHM: HS256
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  PASSWORD_MIN_LENGTH: "8"
+
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: AnalyticsAdmin
+  POSTGRES_PASSWORD: Analytics12345
+  POSTGRES_DB: analytics
+  DB_POOL_SIZE: "20"
+  DB_MAX_OVERFLOW: "10"
+  DB_POOL_TIMEOUT: "30"
+  DB_ECHO: "false"
+
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_PASSWORD: CacheStuff12345
+
+  CELERY_BROKER_URL: redis://:CacheStuff12345@redis:6379/1
+  CELERY_RESULT_BACKEND: redis://:CacheStuff12345@redis:6379/2
+  CELERY_TASK_TIME_LIMIT: "300"
+  CELERY_TASK_SOFT_TIME_LIMIT: "240"
+
+  RATE_LIMIT_PER_MINUTE: "60"
+  RATE_LIMIT_INGESTION_PER_MINUTE: "1000"
+  RATE_LIMIT_AUTH_PER_MINUTE: "5"
+
+  SMTP_HOST: mailhog
+  SMTP_PORT: "1025"
+  SMTP_FROM_EMAIL: noreply@analytics.local
+  SMTP_FROM_NAME: "Analytics Platform"
+  SMTP_TLS: "false"
+
+  MAX_BATCH_SIZE: "1000"
+  MAX_CSV_SIZE_MB: "50"
+  INGESTION_BUFFER_SECONDS: "5"
+
+  BACKEND_CORS_ORIGINS: http://localhost:3000
+  FRONTEND_URL: http://localhost:3000
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: AnalyticsAdmin
+      POSTGRES_PASSWORD: Analytics12345
+      POSTGRES_DB: analytics
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U AnalyticsAdmin -d analytics"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass CacheStuff12345
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "CacheStuff12345", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment: *backend-env
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m scripts.seed &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    volumes:
+      - ./backend:/app
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment: *backend-env
+    command: celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=2
+    volumes:
+      - ./backend:/app
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment: *backend-env
+    command: celery -A app.workers.celery_app beat --loglevel=INFO
+    volumes:
+      - ./backend:/app
+
+  # FIX: --broker must come BEFORE "flower", not after
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      redis: { condition: service_healthy }
+    environment: *backend-env
+    ports:
+      - "5555:5555"
+    command: celery -A app.workers.celery_app --broker=redis://:CacheStuff12345@redis:6379/1 flower --port=5555
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
