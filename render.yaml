@@ -1,42 +1,41 @@
-# render.yaml — Free-tier optimized blueprint for Analytics Platform
-# Place at the repo ROOT (next to backend/ and frontend/ folders).
-#
-# On Render: Dashboard → New + → Blueprint → connect your repo → Apply.
-#
-# FIX: Free tier does NOT support preDeployCommand. We run migrations
-# inside startCommand instead — `alembic upgrade head` runs before uvicorn.
+# render.yaml — Free-tier (web-only) blueprint for Analytics Platform
+# Runs FastAPI + Celery worker + Celery beat in a SINGLE web service via honcho.
+# This is the only configuration that fits 100% within Render's free tier.
 
 databases:
   - name: analytics-postgres
-    plan: free                  # 1 GB, 90-day expiry
+    plan: free
     region: oregon
     postgresMajorVersion: "16"
     ipAllowList: []
 
 services:
-  # ──────────────────────── Redis ────────────────────────
   - type: keyvalue
     name: analytics-redis
-    plan: free                  # 25 MB
+    plan: free
     region: oregon
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
 
-  # ──────────────────────── Web (FastAPI) ────────────────────────
   - type: web
     name: analytics-backend
     runtime: python
     region: oregon
     plan: free
     rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -e .
-    # FIX: Migrations run as part of startCommand, not preDeployCommand
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --workers 1
+    buildCommand: pip install --upgrade pip && pip install -e . && pip install honcho
+    # honcho is a Python process manager (like foreman). It reads Procfile
+    # and runs every process in parallel, restarting any that die.
+    # alembic runs first, then honcho fires the three processes.
+    startCommand: alembic upgrade head && honcho start
     healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.10"
+      # Tell honcho which file to read
+      - key: HONCHO_PROCFILE
+        value: Procfile
 
       # ─── App ───
       - key: ENVIRONMENT
@@ -48,28 +47,17 @@ services:
       - key: SECRET_KEY
         generateValue: true
 
-      # ─── Database wiring ───
+      # ─── Database ───
       - key: POSTGRES_HOST
-        fromDatabase:
-          name: analytics-postgres
-          property: host
+        fromDatabase: { name: analytics-postgres, property: host }
       - key: POSTGRES_PORT
-        fromDatabase:
-          name: analytics-postgres
-          property: port
+        fromDatabase: { name: analytics-postgres, property: port }
       - key: POSTGRES_USER
-        fromDatabase:
-          name: analytics-postgres
-          property: user
+        fromDatabase: { name: analytics-postgres, property: user }
       - key: POSTGRES_PASSWORD
-        fromDatabase:
-          name: analytics-postgres
-          property: password
+        fromDatabase: { name: analytics-postgres, property: password }
       - key: POSTGRES_DB
-        fromDatabase:
-          name: analytics-postgres
-          property: database
-
+        fromDatabase: { name: analytics-postgres, property: database }
       - key: DB_POOL_SIZE
         value: "5"
       - key: DB_MAX_OVERFLOW
@@ -79,17 +67,11 @@ services:
       - key: DB_ECHO
         value: "false"
 
-      # ─── Redis wiring ───
+      # ─── Redis ───
       - key: REDIS_HOST
-        fromService:
-          type: keyvalue
-          name: analytics-redis
-          property: host
+        fromService: { type: keyvalue, name: analytics-redis, property: host }
       - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: analytics-redis
-          property: port
+        fromService: { type: keyvalue, name: analytics-redis, property: port }
       - key: REDIS_DB
         value: "0"
 
@@ -101,13 +83,13 @@ services:
       - key: RATE_LIMIT_AUTH_PER_MINUTE
         value: "5"
 
-      # ─── CORS — UPDATE after first Vercel deploy ───
+      # ─── CORS / Frontend ───
       - key: BACKEND_CORS_ORIGINS
         value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
       - key: FRONTEND_URL
         value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
 
-      # ─── SMTP — set manually in dashboard later ───
+      # ─── SMTP (set in dashboard if you want emails) ───
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -121,7 +103,7 @@ services:
       - key: SMTP_TLS
         value: "true"
 
-      # ─── Ingestion limits ───
+      # ─── Ingestion ───
       - key: MAX_BATCH_SIZE
         value: "1000"
       - key: MAX_CSV_SIZE_MB
@@ -134,88 +116,3 @@ services:
         value: "300"
       - key: CELERY_TASK_SOFT_TIME_LIMIT
         value: "240"
-
-  # ──────────────────────── Worker + Beat (combined) ────────────────────────
-  - type: worker
-    name: analytics-worker
-    runtime: python
-    region: oregon
-    plan: free
-    rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -e .
-    startCommand: celery -A app.workers.celery_app worker --beat --loglevel=INFO --concurrency=2
-    autoDeploy: true
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.10"
-      - key: ENVIRONMENT
-        value: production
-      - key: LOG_LEVEL
-        value: INFO
-
-      - key: SECRET_KEY
-        fromService:
-          type: web
-          name: analytics-backend
-          envVarKey: SECRET_KEY
-
-      - key: POSTGRES_HOST
-        fromDatabase:
-          name: analytics-postgres
-          property: host
-      - key: POSTGRES_PORT
-        fromDatabase:
-          name: analytics-postgres
-          property: port
-      - key: POSTGRES_USER
-        fromDatabase:
-          name: analytics-postgres
-          property: user
-      - key: POSTGRES_PASSWORD
-        fromDatabase:
-          name: analytics-postgres
-          property: password
-      - key: POSTGRES_DB
-        fromDatabase:
-          name: analytics-postgres
-          property: database
-      - key: DB_POOL_SIZE
-        value: "3"
-      - key: DB_MAX_OVERFLOW
-        value: "3"
-      - key: DB_ECHO
-        value: "false"
-
-      - key: REDIS_HOST
-        fromService:
-          type: keyvalue
-          name: analytics-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: analytics-redis
-          property: port
-      - key: REDIS_DB
-        value: "0"
-
-      - key: CELERY_TASK_TIME_LIMIT
-        value: "300"
-      - key: CELERY_TASK_SOFT_TIME_LIMIT
-        value: "240"
-
-      - key: FRONTEND_URL
-        value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
-
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASSWORD
-        sync: false
-      - key: SMTP_FROM_EMAIL
-        sync: false
-      - key: SMTP_TLS
-        value: "true"
