@@ -24,8 +24,8 @@ services:
       pip install --upgrade pip && pip install -e .
     # `alembic upgrade head` runs as a release-phase command so migrations
     # apply on every deploy before traffic shifts.
-    preDeployCommand: |
-      alembic upgrade head && python -m scripts.seed
+    # preDeployCommand: |
+    #   alembic upgrade head && python -m scripts.seed
     startCommand: |
       uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
     healthCheckPath: /health
