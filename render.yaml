@@ -6,7 +6,7 @@ databases:
 
 services:
 
-  # ───── Redis / Key Value ─────
+  # ───── Redis ─────
   - type: keyvalue
     name: analytics-redis
     plan: free
@@ -14,85 +14,121 @@ services:
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
 
-  # ───── Web Service (ONLY runtime service allowed) ─────
+  # ───── Web (FastAPI) ─────
   - type: web
     name: analytics-backend
     runtime: python
-    plan: free
     region: oregon
+    plan: free
     rootDir: backend
-
     buildCommand: pip install --upgrade pip && pip install -e .
-
-    # Run FastAPI + Celery inside SAME container (free-tier workaround)
-    startCommand: >
-      uvicorn app.main:app --host 0.0.0.0 --port $PORT &
-      celery -A app.workers.celery_app worker --beat --loglevel=INFO
-
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
     healthCheckPath: /health
 
     envVars:
-
       - key: PYTHON_VERSION
         value: "3.11.10"
-
       - key: ENVIRONMENT
         value: production
-
       - key: DEBUG
         value: "false"
-
       - key: LOG_LEVEL
         value: INFO
 
       - key: SECRET_KEY
         generateValue: true
 
-      # ───── PostgreSQL ─────
+      # Postgres
       - key: POSTGRES_HOST
         fromDatabase: { name: analytics-postgres, property: host }
-
       - key: POSTGRES_PORT
         fromDatabase: { name: analytics-postgres, property: port }
-
       - key: POSTGRES_USER
         fromDatabase: { name: analytics-postgres, property: user }
-
       - key: POSTGRES_PASSWORD
         fromDatabase: { name: analytics-postgres, property: password }
-
       - key: POSTGRES_DB
         fromDatabase: { name: analytics-postgres, property: database }
 
-      # ───── Redis ─────
+      # Redis
       - key: REDIS_HOST
         fromService: { type: keyvalue, name: analytics-redis, property: host }
-
       - key: REDIS_PORT
         fromService: { type: keyvalue, name: analytics-redis, property: port }
 
-      # ───── Frontend ─────
+      # Frontend (update later)
       - key: BACKEND_CORS_ORIGINS
         value: https://CHANGE-ME.vercel.app
+      - key: FRONTEND_URL
+        value: https://CHANGE-ME.vercel.app
+
+      # SMTP (optional)
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_TLS
+        value: "true"
+
+  # ───── Celery Worker + Beat (COMBINED for free tier) ─────
+  - type: worker
+    name: analytics-worker
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+
+    buildCommand: pip install --upgrade pip && pip install -e .
+
+    # IMPORTANT: beat runs inside worker
+    startCommand: celery -A app.workers.celery_app worker --beat --loglevel=INFO --concurrency=2
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.10"
+      - key: ENVIRONMENT
+        value: production
+
+      - key: SECRET_KEY
+        fromService: { type: web, name: analytics-backend, envVarKey: SECRET_KEY }
+
+      # Postgres
+      - key: POSTGRES_HOST
+        fromDatabase: { name: analytics-postgres, property: host }
+      - key: POSTGRES_PORT
+        fromDatabase: { name: analytics-postgres, property: port }
+      - key: POSTGRES_USER
+        fromDatabase: { name: analytics-postgres, property: user }
+      - key: POSTGRES_PASSWORD
+        fromDatabase: { name: analytics-postgres, property: password }
+      - key: POSTGRES_DB
+        fromDatabase: { name: analytics-postgres, property: database }
+
+      # Redis
+      - key: REDIS_HOST
+        fromService: { type: keyvalue, name: analytics-redis, property: host }
+      - key: REDIS_PORT
+        fromService: { type: keyvalue, name: analytics-redis, property: port }
 
       - key: FRONTEND_URL
         value: https://CHANGE-ME.vercel.app
 
-      # ───── SMTP (safe placeholders) ─────
+      # SMTP
       - key: SMTP_HOST
         sync: false
-
       - key: SMTP_PORT
         sync: false
-
       - key: SMTP_USER
         sync: false
-
       - key: SMTP_PASSWORD
         sync: false
-
       - key: SMTP_FROM_EMAIL
         sync: false
-
       - key: SMTP_TLS
         value: "true"
