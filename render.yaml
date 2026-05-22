@@ -3,34 +3,22 @@
 #
 # On Render: Dashboard → New + → Blueprint → connect your repo → Apply.
 #
-# What you get (all FREE):
-#   1 Postgres (free, 90-day expiry, 1 GB)
-#   1 Redis    (free, 25 MB)
-#   1 Web      (free, sleeps after 15 min idle, 750 hrs/mo)
-#   1 Worker   (free, 750 hrs/mo — Celery worker)
-#   1 Beat     (free, 750 hrs/mo — Celery scheduler)
-#
-# IMPORTANT: Free workers share a 750-hour-per-month pool across all your
-# Render workers. Two always-on workers (worker + beat) use 1,488 hrs/mo
-# combined, so they'll be paused around day 16 of each month. Workarounds:
-#   - Pay $7/mo per worker for Starter (always on), OR
-#   - Combine worker + beat into ONE process using --beat flag (this file does that)
-#
-# Single combined worker = ~744 hrs/mo, fits comfortably in free tier.
+# FIX: Free tier does NOT support preDeployCommand. We run migrations
+# inside startCommand instead — `alembic upgrade head` runs before uvicorn.
 
 databases:
   - name: analytics-postgres
     plan: free                  # 1 GB, 90-day expiry
-    region: oregon              # change to "singapore" or "frankfurt" if closer
+    region: oregon
     postgresMajorVersion: "16"
-    ipAllowList: []             # only internal connections allowed
+    ipAllowList: []
 
 services:
   # ──────────────────────── Redis ────────────────────────
   - type: keyvalue
     name: analytics-redis
     plan: free                  # 25 MB
-    region: oregon              # MUST match Postgres region for free tier
+    region: oregon
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
 
@@ -39,13 +27,13 @@ services:
     name: analytics-backend
     runtime: python
     region: oregon
-    plan: free                  # sleeps after 15 min idle
+    plan: free
     rootDir: backend
     buildCommand: pip install --upgrade pip && pip install -e .
-    preDeployCommand: alembic upgrade head
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --workers 1
+    # FIX: Migrations run as part of startCommand, not preDeployCommand
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --workers 1
     healthCheckPath: /health
-    autoDeploy: true            # redeploy on git push
+    autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.10"
@@ -58,9 +46,9 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: SECRET_KEY
-        generateValue: true     # Render auto-generates a 32+ char secret
+        generateValue: true
 
-      # ─── Database wiring (auto-populated from analytics-postgres above) ───
+      # ─── Database wiring ───
       - key: POSTGRES_HOST
         fromDatabase:
           name: analytics-postgres
@@ -82,7 +70,6 @@ services:
           name: analytics-postgres
           property: database
 
-      # Tighter pool for free tier — free Postgres allows fewer connections
       - key: DB_POOL_SIZE
         value: "5"
       - key: DB_MAX_OVERFLOW
@@ -115,15 +102,14 @@ services:
         value: "5"
 
       # ─── CORS — UPDATE after first Vercel deploy ───
-      # The code's regex already covers *.vercel.app, but set this for prod URL too
       - key: BACKEND_CORS_ORIGINS
         value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
       - key: FRONTEND_URL
         value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
 
-      # ─── SMTP — set manually in dashboard later (skip if you don't need email) ───
+      # ─── SMTP — set manually in dashboard later ───
       - key: SMTP_HOST
-        sync: false             # "sync: false" means: set manually in UI
+        sync: false
       - key: SMTP_PORT
         sync: false
       - key: SMTP_USER
@@ -139,24 +125,22 @@ services:
       - key: MAX_BATCH_SIZE
         value: "1000"
       - key: MAX_CSV_SIZE_MB
-        value: "25"             # reduced for free tier (limited disk)
+        value: "25"
       - key: INGESTION_BUFFER_SECONDS
         value: "5"
 
-      # ─── Celery (uses Redis) ───
+      # ─── Celery ───
       - key: CELERY_TASK_TIME_LIMIT
         value: "300"
       - key: CELERY_TASK_SOFT_TIME_LIMIT
         value: "240"
 
-  # ──────────────────────── Worker + Beat combined ────────────────────────
-  # ONE process running both. Saves 50% of free worker-hours.
-  # The -B flag tells Celery worker to also run the beat scheduler in-process.
+  # ──────────────────────── Worker + Beat (combined) ────────────────────────
   - type: worker
     name: analytics-worker
     runtime: python
     region: oregon
-    plan: free                  # 750 hrs/mo
+    plan: free
     rootDir: backend
     buildCommand: pip install --upgrade pip && pip install -e .
     startCommand: celery -A app.workers.celery_app worker --beat --loglevel=INFO --concurrency=2
@@ -169,14 +153,12 @@ services:
       - key: LOG_LEVEL
         value: INFO
 
-      # Reuse the same secret as the web service
       - key: SECRET_KEY
         fromService:
           type: web
           name: analytics-backend
           envVarKey: SECRET_KEY
 
-      # Same DB wiring as web
       - key: POSTGRES_HOST
         fromDatabase:
           name: analytics-postgres
@@ -198,13 +180,12 @@ services:
           name: analytics-postgres
           property: database
       - key: DB_POOL_SIZE
-        value: "3"              # workers need fewer connections
+        value: "3"
       - key: DB_MAX_OVERFLOW
         value: "3"
       - key: DB_ECHO
         value: "false"
 
-      # Same Redis wiring as web
       - key: REDIS_HOST
         fromService:
           type: keyvalue
@@ -218,17 +199,14 @@ services:
       - key: REDIS_DB
         value: "0"
 
-      # Celery
       - key: CELERY_TASK_TIME_LIMIT
         value: "300"
       - key: CELERY_TASK_SOFT_TIME_LIMIT
         value: "240"
 
-      # Frontend URL (used in email templates and webhook callbacks)
       - key: FRONTEND_URL
         value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
 
-      # SMTP — for sending alert emails and scheduled reports
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
