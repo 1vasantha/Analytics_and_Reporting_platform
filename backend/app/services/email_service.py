@@ -1,4 +1,5 @@
-"""Email service using aiosmtplib + Jinja2 templates."""
+# Email service using aiosmtplib + Jinja2 templates.
+
 from __future__ import annotations
 
 from email.message import EmailMessage
@@ -19,9 +20,8 @@ _env = Environment(
     enable_async=True,
 )
 
-
+# Sends transactional and report emails
 class EmailService:
-    """Sends transactional and report emails."""
 
     async def send(
         self,
@@ -55,8 +55,12 @@ class EmailService:
                 password=settings.SMTP_PASSWORD,
                 use_tls=settings.SMTP_TLS,
             )
-            log.info("email.sent", to=recipients, subject=subject)
-        except Exception:  # noqa: BLE001
+            log.info(
+                "email.sent to=%s subject=%s",
+                recipients,
+                subject,
+            )
+        except Exception:
             log.exception("email.send_failed", to=recipients, subject=subject)
 
     async def render_template(self, template_name: str, **context: object) -> str:
@@ -74,9 +78,7 @@ class EmailService:
         html = await self.render_template(template_name, **context)
         await self.send(to=to, subject=subject, html=html)
 
-
 _email_service = EmailService()
-
 
 def get_email_service() -> EmailService:
     return _email_service

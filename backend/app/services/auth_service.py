@@ -1,11 +1,5 @@
-"""Authentication service.
+# Authentication service- Register a new organization + owner user, Authenticate users, Refresh access, Logout
 
-Responsibilities:
-  * Register a new organization + owner user atomically.
-  * Authenticate users and issue access/refresh token pairs.
-  * Refresh access tokens against revocation list.
-  * Logout (revoke refresh token JTI).
-"""
 from __future__ import annotations
 
 import re
@@ -39,27 +33,18 @@ from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
 
 log = get_logger(__name__)
 
-
+# Lowercase, hyphenate, strip non-alphanumeric
 def _slugify(name: str) -> str:
-    """Lowercase, hyphenate, strip non-alphanumeric."""
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return slug[:48] or "org"
 
-
+# Encapsulates all authentication operations
 class AuthService:
-    """Encapsulates all authentication operations."""
-
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    # ---------- Registration ---------------------------------------------
-
+    # Registration
     async def register(self, payload: RegisterRequest) -> tuple[User, Organization]:
-        """Register a new organization with an owner user.
-
-        Atomic: both the org and the user are created in a single transaction.
-        Returns (user, organization). Raises ConflictError if email or slug exists.
-        """
         existing = await self.db.scalar(select(User).where(User.email == payload.email))
         if existing:
             raise ConflictError("A user with this email already exists")
@@ -90,7 +75,11 @@ class AuthService:
 
         await self.db.refresh(user)
         await self.db.refresh(org)
-        log.info("auth.registered", user_id=str(user.id), org_id=str(org.id))
+        log.info(
+            "auth.registered user_id=%s org_id=%s",
+            user.id,
+            org.id,
+        )
         return user, org
 
     async def _unique_slug(self, base: str) -> str:
@@ -103,42 +92,45 @@ class AuthService:
             if not existing:
                 return slug
             slug = f"{base}-{suffix}"
-        # Fallback: random suffix
         return f"{base}-{uuid.uuid4().hex[:6]}"
 
-    # ---------- Login ----------------------------------------------------
-
+    # Login
     async def authenticate(self, payload: LoginRequest) -> tuple[User, TokenResponse]:
-        """Verify credentials and issue tokens."""
         user = await self.db.scalar(select(User).where(User.email == payload.email))
 
-        # Constant-time-ish: always run verify_password to avoid timing leak
         valid_password = verify_password(
             payload.password,
             user.hashed_password if user else "$2b$12$.invalid.hash.placeholder.................",
         )
 
         if not user or not valid_password:
-            log.info("auth.login.failed", email=payload.email)
+            log.info(
+                "auth.login.failed email=%s",
+                payload.email,
+            )
             raise InvalidCredentialsError()
 
         if not user.is_active:
-            log.info("auth.login.inactive", user_id=str(user.id))
+            log.info(
+                "auth.login.inactive user_id=%s",
+                user.id,
+            )
             raise InvalidCredentialsError("Account is disabled")
 
         tokens = await self._issue_tokens(user)
-        log.info("auth.login.success", user_id=str(user.id))
+        log.info(
+            "auth.login.success user_id=%s",
+            user.id,
+        )
         return user, tokens
 
-    # ---------- Token issuing & refresh ---------------------------------
-
+    # Token issuing & refresh
     async def _issue_tokens(self, user: User) -> TokenResponse:
         access_token, _ = create_access_token(
             str(user.id), org_id=str(user.organization_id), role=user.role
         )
         refresh_token, refresh_jti = create_refresh_token(str(user.id))
 
-        # Track refresh JTI in Redis so we can revoke it; key expires with token
         redis = get_redis()
         ttl = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600
         await redis.set(f"refresh:{refresh_jti}", str(user.id), ex=ttl)
@@ -150,8 +142,8 @@ class AuthService:
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         )
 
+    # Issue a new access token (and rotate refresh token) given a refresh token
     async def refresh(self, refresh_token: str) -> TokenResponse:
-        """Issue a new access token (and rotate refresh token) given a refresh token."""
         try:
             payload = decode_token(refresh_token)
         except JWTError as exc:
@@ -168,7 +160,6 @@ class AuthService:
         if stored != payload.sub:
             raise InvalidCredentialsError("Refresh token user mismatch")
 
-        # Rotate: invalidate the old JTI immediately
         await redis.delete(f"refresh:{payload.jti}")
 
         user = await self.db.get(User, uuid.UUID(payload.sub))
@@ -177,11 +168,11 @@ class AuthService:
 
         return await self._issue_tokens(user)
 
+    # Revoke a refresh token. Best-effort: ignores invalid tokens
     async def logout(self, refresh_token: str) -> None:
-        """Revoke a refresh token. Best-effort: ignores invalid tokens."""
         try:
             payload = decode_token(refresh_token)
             redis = get_redis()
             await redis.delete(f"refresh:{payload.jti}")
         except JWTError:
-            pass  # token already invalid, nothing to revoke
+            pass 

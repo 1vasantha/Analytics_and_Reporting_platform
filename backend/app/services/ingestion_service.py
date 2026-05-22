@@ -1,16 +1,5 @@
-"""Event ingestion service.
+# Event ingestion service- Single event,  Batch , CSV upload, invalidate cached metric results, Publish a "new_events" 
 
-Three ingestion paths:
-  1. Single event — synchronous insert, returns immediately.
-  2. Batch — up to MAX_BATCH_SIZE events; uses bulk insert; can fan out to Celery
-     for large batches.
-  3. CSV upload — stored to disk, processed asynchronously by a Celery worker.
-
-After successful ingestion, we:
-  * Invalidate cached metric results for the org (via Redis pattern delete)
-  * Publish a "new_events" message on the org channel so WebSocket clients
-    can refresh their dashboards.
-"""
 from __future__ import annotations
 
 import json
@@ -30,15 +19,13 @@ from app.schemas.event import EventCreate
 
 log = get_logger(__name__)
 
-
+# Service for persisting events into the time-series store
 class IngestionService:
-    """Service for persisting events into the time-series store."""
-
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
+    # Persist a single event and return the saved row
     async def ingest_single(self, organization_id: uuid.UUID, event: EventCreate) -> Event:
-        """Persist a single event and return the saved row."""
         row = self._build_event_row(organization_id, event)
         obj = Event(**row)
         self.db.add(obj)
@@ -48,27 +35,29 @@ class IngestionService:
         await self._post_ingest(organization_id, count=1)
         return obj
 
+    # Bulk insert events. Returns the number accepted
     async def ingest_batch(
         self, organization_id: uuid.UUID, events: list[EventCreate]
     ) -> int:
-        """Bulk insert events. Returns the number accepted."""
         if not events:
             return 0
 
         rows = [self._build_event_row(organization_id, e) for e in events]
 
-        # Use PostgreSQL's ON CONFLICT DO NOTHING in case of dedupe on (org, id);
-        # though we generate UUIDs server-side so conflicts are theoretical.
         stmt = pg_insert(Event).values(rows)
         await self.db.execute(stmt)
         await self.db.commit()
 
-        log.info("ingestion.batch", org_id=str(organization_id), count=len(rows))
+        log.info(
+            "ingestion.batch org_id=%s count=%s",
+            organization_id,
+            len(rows),
+        )
         await self._post_ingest(organization_id, count=len(rows))
         return len(rows)
 
+    # Update the last_used_at timestamp on an API key (fire-and-forget)
     async def update_api_key_usage(self, api_key_id: uuid.UUID) -> None:
-        """Update the last_used_at timestamp on an API key (fire-and-forget)."""
         await self.db.execute(
             update(ApiKey)
             .where(ApiKey.id == api_key_id)
@@ -76,11 +65,11 @@ class IngestionService:
         )
         await self.db.commit()
 
+    # Convert an EventCreate into a dict ready for bulk insert
     @staticmethod
     def _build_event_row(
         organization_id: uuid.UUID, event: EventCreate
     ) -> dict[str, Any]:
-        """Convert an EventCreate into a dict ready for bulk insert."""
         now = datetime.now()
         return {
             "id": uuid.uuid4(),
@@ -95,22 +84,17 @@ class IngestionService:
             "ingested_at": now,
         }
 
+    # Side effects after a successful ingest
     async def _post_ingest(self, organization_id: uuid.UUID, *, count: int) -> None:
-        """Side effects after a successful ingest.
-
-        These are best-effort — failures are logged but don't roll back the insert.
-        """
         try:
-            # Invalidate cached metric results for this org
             deleted = await cache_delete_pattern(f"metric:{organization_id}:*")
             if deleted:
                 log.debug("ingestion.cache_invalidated", count=deleted)
 
-            # Publish to WebSocket channel
             redis = get_redis()
             await redis.publish(
                 f"org:{organization_id}:events",
                 json.dumps({"type": "new_events", "count": count}),
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("ingestion.post_ingest_failed")

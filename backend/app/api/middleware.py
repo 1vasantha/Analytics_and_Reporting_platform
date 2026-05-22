@@ -1,12 +1,3 @@
-"""Sliding-window rate limiter backed by Redis.
-
-Per-IP global limit applied to all endpoints, with overrides for:
-  * auth endpoints (tighter — protect against brute force)
-  * ingestion endpoints (higher — accommodate burst writes)
-
-Uses Redis sorted set per (key, window). Each request inserts a timestamp;
-old entries trimmed; cardinality enforced.
-"""
 from __future__ import annotations
 
 import time
@@ -19,9 +10,8 @@ from app.core.config import settings
 from app.core.exceptions import RateLimitError
 from app.db.redis import get_redis
 
-
+# Pick a Redis key and limit for the current request.
 def _key_for(request: Request) -> tuple[str, int]:
-    """Pick a Redis key and limit for the current request."""
     ip = request.client.host if request.client else "unknown"
     path = request.url.path
 
@@ -31,16 +21,13 @@ def _key_for(request: Request) -> tuple[str, int]:
         return f"rl:ingest:{ip}", settings.RATE_LIMIT_INGESTION_PER_MINUTE
     return f"rl:global:{ip}", settings.RATE_LIMIT_PER_MINUTE
 
-
+# Apply per-IP sliding-window rate limits.
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Apply per-IP sliding-window rate limits."""
-
     async def dispatch(
         self,
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        # Skip non-API paths (docs, health, websocket handshakes)
         if not request.url.path.startswith("/api/"):
             return await call_next(request)
         if request.method == "OPTIONS":
@@ -52,7 +39,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         cutoff_ms = now_ms - window_seconds * 1000
 
         redis = get_redis()
-        # Pipeline: remove old + add new + count + expire
         pipe = redis.pipeline()
         pipe.zremrangebyscore(key, 0, cutoff_ms)
         pipe.zadd(key, {f"{now_ms}-{id(request)}": now_ms})
@@ -65,7 +51,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 f"Rate limit exceeded ({limit}/min)",
                 details={"limit": limit, "window_seconds": window_seconds},
             )
-
         response = await call_next(request)
         response.headers["X-RateLimit-Limit"] = str(limit)
         response.headers["X-RateLimit-Remaining"] = str(max(0, limit - count))

@@ -1,9 +1,5 @@
-"""Schemas for metric queries, widgets, and dashboards.
+# Schemas for metric queries, widgets, and dashboards- same schema is used for widget queries AND alert evaluations.
 
-The `MetricQuery` schema is the heart of the analytics engine. It declaratively
-describes a query that is then translated to SQL by the metric service. The
-same schema is used for widget queries AND alert evaluations.
-"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -15,14 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.models.enums import AggregationType, ChartType, TimeGranularity
 from app.schemas.common import ORMModel
 
-# ---------- Query primitives ---------------------------------------------
+# Query primitives
 
 FilterOperator = Literal["eq", "neq", "in", "not_in", "gt", "gte", "lt", "lte", "contains"]
 
-
+# A single filter clause applied to events
 class FilterCondition(BaseModel):
-    """A single filter clause applied to events."""
-
     field: str = Field(
         min_length=1,
         max_length=128,
@@ -34,22 +28,16 @@ class FilterCondition(BaseModel):
     @field_validator("field")
     @classmethod
     def validate_field(cls, v: str) -> str:
-        # Only alphanumeric + dot + underscore to prevent SQL injection.
-        # The metric service does parameterized queries but we double-belt.
         import re
 
         if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_.]*$", v):
             raise ValueError("Invalid field name")
         return v
 
-
+# Absolute or relative time range
 class TimeRange(BaseModel):
-    """Absolute or relative time range."""
-
-    # Absolute
     start: datetime | None = None
     end: datetime | None = None
-    # Relative — overrides absolute if set. e.g. "24h", "7d", "30d", "1h"
     relative: str | None = Field(default=None, pattern=r"^\d+[mhdw]$")
 
     @model_validator(mode="after")
@@ -62,34 +50,8 @@ class TimeRange(BaseModel):
             raise ValueError("`start` must be before `end`")
         return self
 
-
+# Declarative metric query
 class MetricQuery(BaseModel):
-    """Declarative metric query.
-
-    Examples:
-        # Total signups in last 24h
-        MetricQuery(
-            event_name="signup",
-            aggregation="count",
-            time_range=TimeRange(relative="24h"),
-        )
-        # Daily revenue trend last 7 days
-        MetricQuery(
-            event_name="purchase",
-            aggregation="sum",
-            value_field="value",
-            granularity="day",
-            time_range=TimeRange(relative="7d"),
-        )
-        # Top 10 referrers
-        MetricQuery(
-            event_name="pageview",
-            aggregation="count",
-            group_by=["properties.referrer"],
-            limit=10,
-        )
-    """
-
     event_name: str | None = Field(default=None, max_length=128)
     source: str | None = Field(default=None, max_length=64)
 
@@ -129,37 +91,33 @@ class MetricQuery(BaseModel):
         return v
 
 
-# ---------- Query results -------------------------------------------------
-
-
+# Query results
+# TimeSeries
 class TimeSeriesPoint(BaseModel):
     timestamp: datetime
     value: float
-    group: str | None = None  # populated when group_by is used
+    group: str | None = None
 
-
+# Result of executing a MetricQuery
 class MetricQueryResult(BaseModel):
-    """Result of executing a MetricQuery."""
-
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     aggregation: AggregationType
     granularity: TimeGranularity | None
     points: list[TimeSeriesPoint]
-    total: float  # rolled-up across all points/groups — useful for KPI widgets
+    total: float  
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-# ---------- Widget ---------------------------------------------------------
-
-
+# Widget 
+# Widget Layout
 class WidgetLayout(BaseModel):
     x: int = Field(default=0, ge=0, le=12)
     y: int = Field(default=0, ge=0)
     w: int = Field(default=6, ge=1, le=12)
     h: int = Field(default=4, ge=1, le=20)
 
-
+# Create Widget
 class WidgetCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     chart_type: ChartType
@@ -167,7 +125,7 @@ class WidgetCreate(BaseModel):
     layout: WidgetLayout = Field(default_factory=WidgetLayout)
     position: int = 0
 
-
+# Update Widget
 class WidgetUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     chart_type: ChartType | None = None
@@ -175,7 +133,7 @@ class WidgetUpdate(BaseModel):
     layout: WidgetLayout | None = None
     position: int | None = None
 
-
+# Widget Response
 class WidgetResponse(ORMModel):
     id: UUID
     dashboard_id: UUID
@@ -188,26 +146,23 @@ class WidgetResponse(ORMModel):
     updated_at: datetime
 
 
-# ---------- Dashboard -----------------------------------------------------
-
-
+# Dashboard 
+# Create Dashboard
 class DashboardCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=2000)
     refresh_interval: int = Field(default=0, ge=0, le=3600)
     is_public: bool = False
 
-
+# Update Dashboard
 class DashboardUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=2000)
     refresh_interval: int | None = Field(default=None, ge=0, le=3600)
     is_public: bool | None = None
 
-
+# Dashboard Summary Response- List view
 class DashboardSummaryResponse(ORMModel):
-    """List view — no widgets."""
-
     id: UUID
     name: str
     description: str | None
@@ -216,7 +171,7 @@ class DashboardSummaryResponse(ORMModel):
     created_at: datetime
     updated_at: datetime
 
-
+# Dashboard Response
 class DashboardResponse(DashboardSummaryResponse):
     widgets: list[WidgetResponse]
     share_token: str | None = None

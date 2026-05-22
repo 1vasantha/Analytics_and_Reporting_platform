@@ -1,4 +1,4 @@
-"""User model — authenticated principals in the system."""
+# User model — authenticated principals in the system.
 from __future__ import annotations
 
 import uuid
@@ -13,10 +13,8 @@ from app.models.enums import UserRole
 if TYPE_CHECKING:
     from app.models.organization import Organization
 
-
+# A user belonging to an organization
 class User(UUIDMixin, TimestampMixin, Base):
-    """A user belonging to an organization."""
-
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)

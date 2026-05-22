@@ -1,9 +1,5 @@
-"""Dashboard and Widget models.
+# Dashboard and Widget models- Widget-saved query config (metric, aggregation, filters, time range, granularity) plus presentation (chart type, layout position).
 
-A Dashboard owns multiple Widgets. Each Widget is a saved query config
-(metric, aggregation, filters, time range, granularity) plus presentation
-(chart type, layout position).
-"""
 from __future__ import annotations
 
 import uuid
@@ -18,10 +14,8 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.organization import Organization
 
-
+# A dashboard — collection of widgets with a layout.
 class Dashboard(UUIDMixin, TimestampMixin, Base):
-    """A dashboard — collection of widgets with a layout."""
-
     __tablename__ = "dashboards"
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -38,7 +32,6 @@ class Dashboard(UUIDMixin, TimestampMixin, Base):
         String(128), unique=True, nullable=True, index=True
     )
 
-    # auto-refresh interval in seconds (0 = disabled, websocket pushes still work)
     refresh_interval: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     organization: Mapped["Organization"] = relationship(back_populates="dashboards")
@@ -48,14 +41,8 @@ class Dashboard(UUIDMixin, TimestampMixin, Base):
         order_by="Widget.position",
     )
 
-
+# A single chart on a dashboard- `query_config` is a JSON blob whose schema is validated by Pydantic
 class Widget(UUIDMixin, TimestampMixin, Base):
-    """A single chart on a dashboard.
-
-    `query_config` is a JSON blob whose schema is validated by Pydantic
-    (see app.schemas.widget.WidgetQueryConfig).
-    """
-
     __tablename__ = "widgets"
 
     dashboard_id: Mapped[uuid.UUID] = mapped_column(
@@ -68,7 +55,6 @@ class Widget(UUIDMixin, TimestampMixin, Base):
     chart_type: Mapped[str] = mapped_column(String(32), nullable=False)
     query_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
-    # Layout (react-grid-layout compatible: x, y, w, h on a 12-column grid)
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     layout: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=lambda: {"x": 0, "y": 0, "w": 6, "h": 4}

@@ -1,9 +1,9 @@
-"""Enumerated types used across the domain."""
+# numerated types used across the domain.
 from __future__ import annotations
 
 from enum import StrEnum
 
-
+# Possible user roles
 class UserRole(StrEnum):
     OWNER = "owner"
     ADMIN = "admin"
@@ -17,9 +17,9 @@ class UserRole(StrEnum):
         return self in (UserRole.OWNER, UserRole.ADMIN, UserRole.ANALYST)
 
     def can_view(self) -> bool:
-        return True  # All roles can view
+        return True
 
-
+# Chart types
 class ChartType(StrEnum):
     LINE = "line"
     BAR = "bar"
@@ -28,7 +28,7 @@ class ChartType(StrEnum):
     AREA = "area"
     TABLE = "table"
 
-
+# Aggregation Types
 class AggregationType(StrEnum):
     COUNT = "count"
     SUM = "sum"
@@ -37,7 +37,7 @@ class AggregationType(StrEnum):
     MAX = "max"
     DISTINCT_COUNT = "distinct_count"
 
-
+# Time Granularity
 class TimeGranularity(StrEnum):
     MINUTE = "minute"
     HOUR = "hour"
@@ -45,7 +45,7 @@ class TimeGranularity(StrEnum):
     WEEK = "week"
     MONTH = "month"
 
-
+# Alert Operators
 class AlertOperator(StrEnum):
     GT = "gt"
     GTE = "gte"
@@ -54,26 +54,26 @@ class AlertOperator(StrEnum):
     EQ = "eq"
     NEQ = "neq"
 
-
+# AlertStatus
 class AlertStatus(StrEnum):
     OK = "ok"
     TRIGGERED = "triggered"
     SILENCED = "silenced"
 
-
+# Notification Channels
 class NotificationChannel(StrEnum):
     EMAIL = "email"
     IN_APP = "in_app"
     WEBHOOK = "webhook"
 
-
+# IngestionJob  Status
 class IngestionJobStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
 
-
+# Report Cadence
 class ReportFrequency(StrEnum):
     DAILY = "daily"
     WEEKLY = "weekly"

@@ -106,6 +106,13 @@ Three task groups:
 
 ## Local development (without Docker)
 
+### Postgres, Redit, mailhog
+docker run -d --name pg -e POSTGRES_USER=analytics -e POSTGRES_PASSWORD=analytics -e POSTGRES_DB=analytics -p 5432:5432 postgres:16-alpine
+
+docker run -d --name redis -p 6379:6379 redis:7-alpine --requirepass "yourpassword"
+
+docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog
+
 ### Backend
 
 ```bash

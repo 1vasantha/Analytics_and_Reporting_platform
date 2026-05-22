@@ -1,12 +1,5 @@
-"""FastAPI dependencies for authentication and authorization.
+# FastAPI dependencies for authentication and authorization.
 
-Usage in endpoints:
-    @router.get("/me")
-    async def me(user: CurrentUser) -> UserResponse: ...
-
-    @router.delete("/dashboards/{id}", dependencies=[require_role(UserRole.ADMIN)])
-    async def delete(...) -> None: ...
-"""
 from __future__ import annotations
 
 import uuid
@@ -34,17 +27,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=F
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
-
+# Validate the bearer token and returnn User else Raises AuthenticationError or TokenExpiredError.
 async def get_current_user(
     db: DbSession,
     token: Annotated[str | None, Depends(oauth2_scheme)] = None,
 ) -> User:
-    """Validate the bearer token and return the User.
-
-    Raises:
-        AuthenticationError: If no token or invalid token.
-        TokenExpiredError: If token is expired.
-    """
     if not token:
         raise AuthenticationError("Not authenticated")
 
@@ -62,13 +49,10 @@ async def get_current_user(
 
     return user
 
-
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
-
+# Dependency factory: enforce that current user has one of the given roles.
 def require_role(*allowed: UserRole):
-    """Dependency factory: enforce that current user has one of the given roles."""
-
     async def _check(user: CurrentUser) -> User:
         if user.role not in [r.value for r in allowed]:
             raise PermissionDeniedError(
@@ -78,16 +62,12 @@ def require_role(*allowed: UserRole):
 
     return Depends(_check)
 
-
-# ----- API Key auth (for ingestion endpoints) ----------------------------
-
-
+# For ingestion endpoints- Authenticate via API key from either `Authorization: Bearer <key>` or `X-API-Key`
 async def get_api_key(
     db: DbSession,
     authorization: Annotated[str | None, Header()] = None,
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ) -> ApiKey:
-    """Authenticate via API key from either `Authorization: Bearer <key>` or `X-API-Key`."""
     raw_key: str | None = x_api_key
     if not raw_key and authorization:
         scheme, _, value = authorization.partition(" ")
@@ -105,6 +85,5 @@ async def get_api_key(
         raise AuthenticationError("Invalid API key")
 
     return api_key
-
 
 ApiKeyAuth = Annotated[ApiKey, Depends(get_api_key)]

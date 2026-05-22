@@ -1,8 +1,5 @@
-"""Domain models package.
+# Domain models package- All models must be imported here so Alembic's `autogenerate` can find them via `Base.metadata`.
 
-All models must be imported here so Alembic's `autogenerate` can find them
-via `Base.metadata`.
-"""
 from app.db.base import Base
 from app.models.alert import Alert, Notification, ScheduledReport
 from app.models.api_key import ApiKey

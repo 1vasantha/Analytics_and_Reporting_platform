@@ -1,7 +1,3 @@
-"""FastAPI application factory.
-
-This is the entry point for `uvicorn app.main:app`.
-"""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -23,13 +19,16 @@ from app.schemas.common import ErrorResponse, HealthCheck
 from app.websockets.manager import manager as ws_manager
 from app.websockets.routes import router as ws_router
 
-
+# Lifespan handler: configures logging and starts WS listener at boot.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan handler: configures logging and starts WS listener at boot."""
     configure_logging()
     log = get_logger(__name__)
-    log.info("app.starting", env=settings.ENVIRONMENT, version=settings.VERSION)
+    log.info(
+        "app.starting env=%s version=%s",
+        settings.ENVIRONMENT,
+        settings.VERSION,
+    )
 
     await ws_manager.start_redis_listener()
 
@@ -40,9 +39,8 @@ async def lifespan(app: FastAPI):
     await close_redis()
     await engine.dispose()
 
-
+# Application factory — keeps configuration declarative and testable.
 def create_app() -> FastAPI:
-    """Application factory — keeps configuration declarative and testable."""
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
@@ -52,7 +50,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS
+    # Cors
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.BACKEND_CORS_ORIGINS,
@@ -69,8 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
     app.include_router(ws_router)
 
-    # ----- Exception handlers ------------------------------------------
-
+    # Exception handlers
     @app.exception_handler(AppException)
     async def handle_app_exception(_: Request, exc: AppException) -> JSONResponse:
         return JSONResponse(
@@ -107,11 +104,9 @@ def create_app() -> FastAPI:
             ).model_dump(),
         )
 
-    # ----- Health check -------------------------------------------------
-
+    # Health check
     @app.get("/health", response_model=HealthCheck, tags=["meta"])
     async def health() -> HealthCheck:
-        """Liveness + dependency health check."""
         db_ok = False
         redis_ok = False
 
@@ -119,13 +114,13 @@ def create_app() -> FastAPI:
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
                 db_ok = True
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
         try:
             await get_redis().ping()
             redis_ok = True
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
         return HealthCheck(
@@ -135,8 +130,9 @@ def create_app() -> FastAPI:
             redis=redis_ok,
         )
 
+    # Root api
     @app.get("/", tags=["meta"])
-    async def root() -> dict[str, str]:
+    def root() -> dict[str, str]:
         return {
             "name": settings.PROJECT_NAME,
             "version": settings.VERSION,
@@ -144,6 +140,5 @@ def create_app() -> FastAPI:
         }
 
     return app
-
 
 app = create_app()

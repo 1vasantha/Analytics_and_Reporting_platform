@@ -1,4 +1,5 @@
-"""Tests for dashboards and widgets."""
+# Tests for dashboards and widgets
+
 from __future__ import annotations
 
 import pytest
@@ -67,7 +68,6 @@ async def test_add_widget(client):
     assert resp.status_code == 201
     assert resp.json()["title"] == "Signups"
 
-    # Verify it's reflected in the dashboard fetch
     detail = await client.get(f"/api/v1/dashboards/{dash_id}", headers=headers)
     assert len(detail.json()["widgets"]) == 1
 
@@ -88,7 +88,7 @@ async def test_ad_hoc_query(client):
     assert resp.status_code == 200
     body = resp.json()
     assert "points" in body
-    assert body["total"] == 0  # no events yet
+    assert body["total"] == 0 
 
 
 @pytest.mark.asyncio
@@ -105,6 +105,5 @@ async def test_cross_org_isolation(client):
     )
     dash_id = dash.json()["id"]
 
-    # B cannot fetch A's dashboard
     resp = await client.get(f"/api/v1/dashboards/{dash_id}", headers=h_b)
     assert resp.status_code == 404

@@ -1,4 +1,5 @@
-"""Dashboard and widget service."""
+# Dashboard and widget service.
+
 from __future__ import annotations
 
 import secrets
@@ -20,13 +21,11 @@ from app.schemas.dashboard import (
 
 log = get_logger(__name__)
 
-
 class DashboardService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    # ---------- Dashboards ----------------------------------------------
-
+    # Dashboards
     async def list_dashboards(self, organization_id: uuid.UUID) -> list[Dashboard]:
         result = await self.db.execute(
             select(Dashboard)
@@ -96,7 +95,6 @@ class DashboardService:
         for key, value in data.items():
             setattr(dashboard, key, value)
 
-        # If toggling public on/off, regenerate share token
         if "is_public" in data:
             dashboard.share_token = secrets.token_urlsafe(24) if data["is_public"] else None
 
@@ -111,15 +109,13 @@ class DashboardService:
         await self.db.delete(dashboard)
         await self.db.commit()
 
-    # ---------- Widgets -------------------------------------------------
-
+    # Widgets
     async def add_widget(
         self,
         dashboard_id: uuid.UUID,
         organization_id: uuid.UUID,
         payload: WidgetCreate,
     ) -> Widget:
-        # Ensure dashboard belongs to org (and exists)
         await self.get_dashboard(dashboard_id, organization_id)
 
         widget = Widget(

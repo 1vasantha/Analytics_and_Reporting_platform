@@ -1,0 +1,102 @@
+# =========================
+# Git
+# =========================
+.git
+.gitignore
+.gitattributes
+
+# =========================
+# Node.js
+# =========================
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+dist
+build
+coverage
+.next
+out
+
+# =========================
+# Python
+# =========================
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.pytest_cache
+.mypy_cache
+.coverage
+dist/
+build/
+
+# =========================
+# Java / Gradle / Maven
+# =========================
+target
+*.class
+*.jar
+*.war
+*.ear
+.gradle
+build/
+
+# =========================
+# Logs & temp files
+# =========================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editors
+# =========================
+.vscode
+.idea
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# =========================
+# Environment & secrets
+# =========================
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# =========================
+# Docker
+# =========================
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+.dockerignore
+
+# =========================
+# Misc
+# =========================
+*.zip
+*.tar
+*.gz
+README.md
+LICENSE
+docs/

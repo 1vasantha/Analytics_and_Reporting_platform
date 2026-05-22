@@ -1,13 +1,12 @@
 """Event model — the time-series fact table.
-
-This is the hottest table in the system. Indexed for the common query patterns:
+Indexed for the common query patterns:
 - Filter by org + event_name + time range (most aggregations)
 - Filter by org + source + time range
 - JSONB properties allow arbitrary flexible attributes per event
-
 For production scale this table should be partitioned by month (declarative
 partitioning is created by the Alembic migration).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -23,10 +22,8 @@ from app.db.base import Base, UUIDMixin
 if TYPE_CHECKING:
     from app.models.organization import Organization
 
-
+# A single observed event/data point.
 class Event(UUIDMixin, Base):
-    """A single observed event/data point."""
-
     __tablename__ = "events"
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -34,23 +31,18 @@ class Event(UUIDMixin, Base):
         nullable=False,
     )
 
-    # Required dimensions
     event_name: Mapped[str] = mapped_column(String(128), nullable=False)
     source: Mapped[str] = mapped_column(String(64), nullable=False, default="api")
 
-    # Optional dimensions
     user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     session_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
-    # Numeric value used for sum/avg aggregations (e.g. revenue, duration_ms)
     value: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    # Arbitrary properties (queryable via JSONB operators)
     properties: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default="{}"
     )
 
-    # Event time — when it happened in the source system. May differ from created_at.
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -71,10 +63,8 @@ class Event(UUIDMixin, Base):
         Index("ix_events_properties_gin", "properties", postgresql_using="gin"),
     )
 
-
+# Tracks async CSV-upload ingestion jobs.
 class IngestionJob(UUIDMixin, Base):
-    """Tracks async CSV-upload ingestion jobs."""
-
     __tablename__ = "ingestion_jobs"
 
     organization_id: Mapped[uuid.UUID] = mapped_column(

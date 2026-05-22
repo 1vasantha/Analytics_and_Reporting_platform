@@ -1,8 +1,5 @@
-"""Organization (tenant) model.
+# Organization (tenant) model- entity (users, events, dashboards, alerts)-one organization- queries by organization_id.
 
-Every other domain entity (users, events, dashboards, alerts) belongs to
-exactly one organization. All queries MUST filter by organization_id.
-"""
 from __future__ import annotations
 
 import uuid
@@ -19,16 +16,13 @@ if TYPE_CHECKING:
     from app.models.event import Event
     from app.models.user import User
 
-
+# A tenant in the multi-tenant system.
 class Organization(UUIDMixin, TimestampMixin, Base):
-    """A tenant in the multi-tenant system."""
-
     __tablename__ = "organizations"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
 
-    # Relationships
     users: Mapped[list["User"]] = relationship(
         back_populates="organization",
         cascade="all, delete-orphan",
@@ -49,10 +43,8 @@ class Organization(UUIDMixin, TimestampMixin, Base):
     def __repr__(self) -> str:
         return f"<Organization {self.slug}>"
 
-
+# Pending invitations to join an organization.
 class Invitation(UUIDMixin, TimestampMixin, Base):
-    """Pending invitations to join an organization."""
-
     __tablename__ = "invitations"
 
     organization_id: Mapped[uuid.UUID] = mapped_column(

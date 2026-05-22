@@ -1,16 +1,5 @@
-"""Metric query engine.
+# Metric query engine.- Translates a declarative `MetricQuery` (Pydantic model) into a parameterized SQLAlchemy Core query
 
-Translates a declarative `MetricQuery` (Pydantic model) into a parameterized
-SQLAlchemy Core query that executes safely against the `events` table.
-
-Key design choices:
-  * NO string interpolation of user input — every value is bound as a parameter.
-  * The set of column/property fields is validated against a whitelist by the
-    Pydantic schema layer (alphanumeric + dot only).
-  * Time bucketing uses `date_trunc()` so PostgreSQL can use the index.
-  * Result caching keyed on (org_id, hash(query_json)).
-  * The engine is stateless — only takes an AsyncSession.
-"""
 from __future__ import annotations
 
 import hashlib
@@ -47,7 +36,6 @@ from app.schemas.dashboard import (
 
 log = get_logger(__name__)
 
-# Whitelist of top-level event columns that can be filtered/grouped on.
 # Anything else must go through the `properties` JSONB field.
 _TOP_LEVEL_COLUMNS: dict[str, Column] = {
     "event_name": Event.event_name,
@@ -74,9 +62,8 @@ _RELATIVE_TO_DELTA: dict[str, callable] = {
     "w": lambda n: timedelta(weeks=n),
 }
 
-
+# Resolve a TimeRange into concrete UTC (start, end) datetimes
 def _resolve_time_range(tr: TimeRange) -> tuple[datetime, datetime]:
-    """Resolve a TimeRange into concrete UTC (start, end) datetimes."""
     end = datetime.now(UTC)
     if tr.relative:
         match = _RELATIVE_RE.match(tr.relative)
@@ -86,34 +73,25 @@ def _resolve_time_range(tr: TimeRange) -> tuple[datetime, datetime]:
         delta = _RELATIVE_TO_DELTA[unit](n)
         return end - delta, end
 
-    assert tr.start is not None and tr.end is not None  # validated by Pydantic
+    assert tr.start is not None and tr.end is not None
     return tr.start, tr.end
 
-
+# Resolve a field name to a SQLAlchemy column expression
 def _resolve_field(field: str) -> ColumnElement[Any]:
-    """Resolve a field name to a SQLAlchemy column expression.
-
-    Top-level columns return the mapped column directly.
-    Property paths (e.g. "properties.country") become `events.properties->>'country'`.
-    """
     if field in _TOP_LEVEL_COLUMNS:
         return _TOP_LEVEL_COLUMNS[field]
 
     if field.startswith("properties."):
-        # Strip the prefix, allow nested via -> for intermediate, ->> for final text
         path = field.removeprefix("properties.").split(".")
         expr: Any = Event.properties
-        # Walk all but the last with ->
         for segment in path[:-1]:
             expr = expr[segment]
-        # Final segment with ->> for text extraction
         return expr[path[-1]].astext
 
     raise ValidationError(f"Unknown field: {field}")
 
-
+# Apply a single FilterCondition to a select statement
 def _apply_filter(stmt: Any, cond: FilterCondition) -> Any:
-    """Apply a single FilterCondition to a select statement."""
     col = _resolve_field(cond.field)
 
     if cond.operator == "eq":
@@ -141,9 +119,8 @@ def _apply_filter(stmt: Any, cond: FilterCondition) -> Any:
 
     raise ValidationError(f"Unsupported operator: {cond.operator}")
 
-
+# Build the aggregation SQL expression
 def _aggregation_expr(query: MetricQuery) -> ColumnElement[float]:
-    """Build the aggregation SQL expression."""
     agg = query.aggregation
     if agg == AggregationType.COUNT:
         return cast(func.count(Event.id), Float).label("value")
@@ -152,10 +129,8 @@ def _aggregation_expr(query: MetricQuery) -> ColumnElement[float]:
         col = _resolve_field(query.value_field or "user_id")
         return cast(func.count(func.distinct(col)), Float).label("value")
 
-    # SUM/AVG/MIN/MAX need a numeric column. value_field is required (validated).
     assert query.value_field is not None
     value_col = _resolve_field(query.value_field)
-    # Property values come back as text from ->>; cast to float defensively
     if query.value_field.startswith("properties."):
         value_col = cast(value_col, Float)
 
@@ -167,16 +142,14 @@ def _aggregation_expr(query: MetricQuery) -> ColumnElement[float]:
     }
     return cast(func_map[agg](value_col), Float).label("value")
 
-
+# Build a deterministic cache key from org + query
 def _cache_key(org_id: uuid.UUID, query: MetricQuery) -> str:
-    """Build a deterministic cache key from org + query."""
     payload = json.dumps(query.model_dump(mode="json"), sort_keys=True, default=str)
     digest = hashlib.sha256(payload.encode()).hexdigest()[:16]
     return f"metric:{org_id}:{digest}"
 
-
+# Pick a cache TTL appropriate for the query's granularity
 def _cache_ttl(query: MetricQuery) -> int:
-    """Pick a cache TTL appropriate for the query's granularity."""
     if query.granularity == TimeGranularity.MINUTE:
         return 15
     if query.granularity == TimeGranularity.HOUR:
@@ -185,10 +158,8 @@ def _cache_ttl(query: MetricQuery) -> int:
         return 300
     return 60
 
-
+# Stateless service for executing metric queries
 class MetricService:
-    """Stateless service for executing metric queries."""
-
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
@@ -199,10 +170,6 @@ class MetricService:
         *,
         use_cache: bool = True,
     ) -> MetricQueryResult:
-        """Execute a MetricQuery and return the result.
-
-        Cached in Redis with a granularity-aware TTL.
-        """
         cache_key = _cache_key(organization_id, query) if use_cache else None
         if cache_key:
             cached = await cache_get(cache_key)
@@ -212,11 +179,9 @@ class MetricService:
 
         start, end = _resolve_time_range(query.time_range)
 
-        # Build base SELECT
         select_cols: list[Any] = [_aggregation_expr(query)]
         group_cols: list[Any] = []
 
-        # Time bucketing
         time_col: ColumnElement[datetime] | None = None
         if query.granularity:
             time_col = func.date_trunc(
@@ -225,7 +190,6 @@ class MetricService:
             select_cols.insert(0, time_col)
             group_cols.append(time_col)
 
-        # Additional group_by dimensions
         dimension_cols: list[ColumnElement[Any]] = []
         for field in query.group_by:
             col = _resolve_field(field).label(f"dim_{len(dimension_cols)}")
@@ -233,7 +197,6 @@ class MetricService:
             select_cols.append(col)
             group_cols.append(col)
 
-        # Build statement
         stmt = select(*select_cols).where(
             and_(
                 Event.organization_id == organization_id,
@@ -242,21 +205,17 @@ class MetricService:
             )
         )
 
-        # Top-level fast-path filters
         if query.event_name:
             stmt = stmt.where(Event.event_name == query.event_name)
         if query.source:
             stmt = stmt.where(Event.source == query.source)
 
-        # User filters
         for cond in query.filters:
             stmt = _apply_filter(stmt, cond)
 
-        # Group / order / limit
         if group_cols:
             stmt = stmt.group_by(*group_cols)
 
-        # Sort: time ascending for time series, value descending for ranked
         if time_col is not None:
             stmt = stmt.order_by(time_col.asc())
         else:
@@ -302,14 +261,14 @@ class MetricService:
 
         return result
 
+    # Convert raw query rows into TimeSeriesPoint records
     @staticmethod
     def _rows_to_points(
         rows: list[Any], *, has_time: bool, num_dims: int
     ) -> list[TimeSeriesPoint]:
-        """Convert raw query rows into TimeSeriesPoint records."""
         points: list[TimeSeriesPoint] = []
         for row in rows:
-            data = row._mapping  # SQLAlchemy Row -> dict-like
+            data = row._mapping
             ts = data["ts"] if has_time else datetime.now(UTC)
             value = data["value"] or 0.0
 

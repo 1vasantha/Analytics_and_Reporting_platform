@@ -1,8 +1,8 @@
-"""Tests for event ingestion."""
+# Tests for event ingestion
+
 from __future__ import annotations
 
 import pytest
-
 
 async def _register(client, email="ing@test.com"):
     resp = await client.post(
@@ -16,14 +16,12 @@ async def _register(client, email="ing@test.com"):
     )
     return resp.json()
 
-
 @pytest.mark.asyncio
 async def test_create_api_key_and_ingest(client):
     auth = await _register(client)
     access = auth["tokens"]["access_token"]
     headers = {"Authorization": f"Bearer {access}"}
 
-    # Create an API key
     keyresp = await client.post(
         "/api/v1/ingest/api-keys",
         json={"name": "Production"},
@@ -33,7 +31,6 @@ async def test_create_api_key_and_ingest(client):
     api_key = keyresp.json()["key"]
     assert api_key.startswith("ak_")
 
-    # Use the key to ingest an event
     ingest = await client.post(
         "/api/v1/ingest/events",
         json={
@@ -45,7 +42,6 @@ async def test_create_api_key_and_ingest(client):
     )
     assert ingest.status_code == 202
     assert ingest.json()["accepted"] == 1
-
 
 @pytest.mark.asyncio
 async def test_batch_ingest(client):
@@ -66,7 +62,6 @@ async def test_batch_ingest(client):
     )
     assert resp.status_code == 202
     assert resp.json()["accepted"] == 50
-
 
 @pytest.mark.asyncio
 async def test_invalid_api_key_rejected(client):
