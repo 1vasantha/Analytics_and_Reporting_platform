@@ -1,37 +1,56 @@
+# render.yaml — Free-tier optimized blueprint for Analytics Platform
+# Place at the repo ROOT (next to backend/ and frontend/ folders).
+#
+# On Render: Dashboard → New + → Blueprint → connect your repo → Apply.
+#
+# What you get (all FREE):
+#   1 Postgres (free, 90-day expiry, 1 GB)
+#   1 Redis    (free, 25 MB)
+#   1 Web      (free, sleeps after 15 min idle, 750 hrs/mo)
+#   1 Worker   (free, 750 hrs/mo — Celery worker)
+#   1 Beat     (free, 750 hrs/mo — Celery scheduler)
+#
+# IMPORTANT: Free workers share a 750-hour-per-month pool across all your
+# Render workers. Two always-on workers (worker + beat) use 1,488 hrs/mo
+# combined, so they'll be paused around day 16 of each month. Workarounds:
+#   - Pay $7/mo per worker for Starter (always on), OR
+#   - Combine worker + beat into ONE process using --beat flag (this file does that)
+#
+# Single combined worker = ~744 hrs/mo, fits comfortably in free tier.
+
 databases:
   - name: analytics-postgres
-    plan: free       
-    region: oregon
-    postgresMajorVersion: 16
-    ipAllowList: []         
+    plan: free                  # 1 GB, 90-day expiry
+    region: oregon              # change to "singapore" or "frankfurt" if closer
+    postgresMajorVersion: "16"
+    ipAllowList: []             # only internal connections allowed
+
 services:
-  # Redis
+  # ──────────────────────── Redis ────────────────────────
   - type: keyvalue
     name: analytics-redis
-    plan: free             
-    region: oregon
+    plan: free                  # 25 MB
+    region: oregon              # MUST match Postgres region for free tier
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
 
-  # ──────────────── Web (FastAPI) ────────────────
+  # ──────────────────────── Web (FastAPI) ────────────────────────
   - type: web
     name: analytics-backend
     runtime: python
     region: oregon
-    plan: free                # sleeps after 15 min; upgrade to "starter" ($7/mo) to keep awake
+    plan: free                  # sleeps after 15 min idle
     rootDir: backend
-    buildCommand: |
-      pip install --upgrade pip && pip install -e .
-    # `alembic upgrade head` runs as a release-phase command so migrations
-    # apply on every deploy before traffic shifts.
-    # preDeployCommand: |
-    #   alembic upgrade head && python -m scripts.seed
-    startCommand: |
-      alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    buildCommand: pip install --upgrade pip && pip install -e .
+    preDeployCommand: alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --workers 1
     healthCheckPath: /health
+    autoDeploy: true            # redeploy on git push
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.10"
+
+      # ─── App ───
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
@@ -39,118 +58,186 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: SECRET_KEY
-        generateValue: true   # Render generates a 32+ char secret on first deploy
-      # Database — pulled from the managed Postgres service above
+        generateValue: true     # Render auto-generates a 32+ char secret
+
+      # ─── Database wiring (auto-populated from analytics-postgres above) ───
       - key: POSTGRES_HOST
-        fromDatabase: { name: analytics-postgres, property: host }
+        fromDatabase:
+          name: analytics-postgres
+          property: host
       - key: POSTGRES_PORT
-        fromDatabase: { name: analytics-postgres, property: port }
+        fromDatabase:
+          name: analytics-postgres
+          property: port
       - key: POSTGRES_USER
-        fromDatabase: { name: analytics-postgres, property: user }
+        fromDatabase:
+          name: analytics-postgres
+          property: user
       - key: POSTGRES_PASSWORD
-        fromDatabase: { name: analytics-postgres, property: password }
+        fromDatabase:
+          name: analytics-postgres
+          property: password
       - key: POSTGRES_DB
-        fromDatabase: { name: analytics-postgres, property: database }
-      # Redis — pulled from the managed Redis service above
+        fromDatabase:
+          name: analytics-postgres
+          property: database
+
+      # Tighter pool for free tier — free Postgres allows fewer connections
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: DB_MAX_OVERFLOW
+        value: "5"
+      - key: DB_POOL_TIMEOUT
+        value: "30"
+      - key: DB_ECHO
+        value: "false"
+
+      # ─── Redis wiring ───
       - key: REDIS_HOST
-        fromService: { type: keyvalue, name: analytics-redis, property: host }
+        fromService:
+          type: keyvalue
+          name: analytics-redis
+          property: host
       - key: REDIS_PORT
-        fromService: { type: keyvalue, name: analytics-redis, property: port }
-      # CORS — fill in your Vercel domain after deploy
+        fromService:
+          type: keyvalue
+          name: analytics-redis
+          property: port
+      - key: REDIS_DB
+        value: "0"
+
+      # ─── Rate limits ───
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "60"
+      - key: RATE_LIMIT_INGESTION_PER_MINUTE
+        value: "1000"
+      - key: RATE_LIMIT_AUTH_PER_MINUTE
+        value: "5"
+
+      # ─── CORS — UPDATE after first Vercel deploy ───
+      # The code's regex already covers *.vercel.app, but set this for prod URL too
       - key: BACKEND_CORS_ORIGINS
-        value: https://analytics-backend-m7oh.onrender.com
+        value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
       - key: FRONTEND_URL
-        value: https://analytics-and-reporting-platform-enc882qle.vercel.app
-      # SMTP — leave Mailhog defaults out; configure a real provider below if needed
+        value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
+
+      # ─── SMTP — set manually in dashboard later (skip if you don't need email) ───
       - key: SMTP_HOST
-        value: smtp.example.com
+        sync: false             # "sync: false" means: set manually in UI
       - key: SMTP_PORT
-        value: "587"
+        sync: false
       - key: SMTP_USER
-        sync: false           # set manually in dashboard (sensitive)
+        sync: false
       - key: SMTP_PASSWORD
         sync: false
       - key: SMTP_FROM_EMAIL
-        value: noreply@yourdomain.com
+        sync: false
       - key: SMTP_TLS
         value: "true"
 
-  # ──────────────── Celery worker ────────────────
+      # ─── Ingestion limits ───
+      - key: MAX_BATCH_SIZE
+        value: "1000"
+      - key: MAX_CSV_SIZE_MB
+        value: "25"             # reduced for free tier (limited disk)
+      - key: INGESTION_BUFFER_SECONDS
+        value: "5"
+
+      # ─── Celery (uses Redis) ───
+      - key: CELERY_TASK_TIME_LIMIT
+        value: "300"
+      - key: CELERY_TASK_SOFT_TIME_LIMIT
+        value: "240"
+
+  # ──────────────────────── Worker + Beat combined ────────────────────────
+  # ONE process running both. Saves 50% of free worker-hours.
+  # The -B flag tells Celery worker to also run the beat scheduler in-process.
   - type: worker
     name: analytics-worker
     runtime: python
     region: oregon
-    plan: free                # workers do NOT sleep on free tier
+    plan: free                  # 750 hrs/mo
     rootDir: backend
-    buildCommand: |
-      pip install --upgrade pip && pip install -e .
-    startCommand: |
-      celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=2
+    buildCommand: pip install --upgrade pip && pip install -e .
+    startCommand: celery -A app.workers.celery_app worker --beat --loglevel=INFO --concurrency=2
+    autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.10"
       - key: ENVIRONMENT
         value: production
+      - key: LOG_LEVEL
+        value: INFO
+
+      # Reuse the same secret as the web service
       - key: SECRET_KEY
-        fromService: { type: web, name: analytics-backend, envVarKey: SECRET_KEY }
+        fromService:
+          type: web
+          name: analytics-backend
+          envVarKey: SECRET_KEY
+
+      # Same DB wiring as web
       - key: POSTGRES_HOST
-        fromDatabase: { name: analytics-postgres, property: host }
+        fromDatabase:
+          name: analytics-postgres
+          property: host
       - key: POSTGRES_PORT
-        fromDatabase: { name: analytics-postgres, property: port }
+        fromDatabase:
+          name: analytics-postgres
+          property: port
       - key: POSTGRES_USER
-        fromDatabase: { name: analytics-postgres, property: user }
+        fromDatabase:
+          name: analytics-postgres
+          property: user
       - key: POSTGRES_PASSWORD
-        fromDatabase: { name: analytics-postgres, property: password }
+        fromDatabase:
+          name: analytics-postgres
+          property: password
       - key: POSTGRES_DB
-        fromDatabase: { name: analytics-postgres, property: database }
+        fromDatabase:
+          name: analytics-postgres
+          property: database
+      - key: DB_POOL_SIZE
+        value: "3"              # workers need fewer connections
+      - key: DB_MAX_OVERFLOW
+        value: "3"
+      - key: DB_ECHO
+        value: "false"
+
+      # Same Redis wiring as web
       - key: REDIS_HOST
-        fromService: { type: keyvalue, name: analytics-redis, property: host }
+        fromService:
+          type: keyvalue
+          name: analytics-redis
+          property: host
       - key: REDIS_PORT
-        fromService: { type: keyvalue, name: analytics-redis, property: port }
+        fromService:
+          type: keyvalue
+          name: analytics-redis
+          property: port
+      - key: REDIS_DB
+        value: "0"
+
+      # Celery
+      - key: CELERY_TASK_TIME_LIMIT
+        value: "300"
+      - key: CELERY_TASK_SOFT_TIME_LIMIT
+        value: "240"
+
+      # Frontend URL (used in email templates and webhook callbacks)
       - key: FRONTEND_URL
-        value: https://YOUR-FRONTEND.vercel.app
+        value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
+
+      # SMTP — for sending alert emails and scheduled reports
       - key: SMTP_HOST
-        value: smtp.example.com
+        sync: false
       - key: SMTP_PORT
-        value: "587"
+        sync: false
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASSWORD
         sync: false
       - key: SMTP_FROM_EMAIL
-        value: noreply@yourdomain.com
+        sync: false
       - key: SMTP_TLS
         value: "true"
-
-  # ──────────────── Celery beat (scheduler) ────────────────
-  - type: worker
-    name: analytics-beat
-    runtime: python
-    region: oregon
-    plan: free
-    rootDir: backend
-    buildCommand: |
-      pip install --upgrade pip && pip install -e .
-    startCommand: |
-      celery -A app.workers.celery_app beat --loglevel=INFO
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.10"
-      - key: ENVIRONMENT
-        value: production
-      - key: SECRET_KEY
-        fromService: { type: web, name: analytics-backend, envVarKey: SECRET_KEY }
-      - key: POSTGRES_HOST
-        fromDatabase: { name: analytics-postgres, property: host }
-      - key: POSTGRES_PORT
-        fromDatabase: { name: analytics-postgres, property: port }
-      - key: POSTGRES_USER
-        fromDatabase: { name: analytics-postgres, property: user }
-      - key: POSTGRES_PASSWORD
-        fromDatabase: { name: analytics-postgres, property: password }
-      - key: POSTGRES_DB
-        fromDatabase: { name: analytics-postgres, property: database }
-      - key: REDIS_HOST
-        fromService: { type: keyvalue, name: analytics-redis, property: host }
-      - key: REDIS_PORT
-        fromService: { type: keyvalue, name: analytics-redis, property: port }
