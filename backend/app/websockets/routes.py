@@ -1,13 +1,12 @@
 """WebSocket endpoint for real-time dashboard updates.
-
 Connection URL: /ws?token=<access_jwt>
-
 Client receives JSON messages:
     {"type": "events_ingested", "count": 12}
     {"type": "notification", "id": "...", "title": "...", "message": "..."}
     {"type": "alert_triggered", "alert_id": "...", "value": 1234}
     {"type": "ping"} — sent every 30s; client should reply with pong
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,16 +22,11 @@ from app.websockets.manager import manager
 router = APIRouter()
 log = get_logger(__name__)
 
-
+# Authenticated WebSocket endpoint
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket, token: str = Query(...)
 ) -> None:
-    """Authenticated WebSocket endpoint.
-
-    Token must be a valid access JWT (passed as query param since browser
-    WebSocket APIs don't allow custom headers).
-    """
     try:
         payload = decode_token(token)
     except JWTError:
@@ -53,8 +47,6 @@ async def websocket_endpoint(
     await websocket.send_json({"type": "connected", "org": str(organization_id)})
 
     try:
-        # Heartbeat loop and inbound message reader.
-        # Run them concurrently; if either fails, close cleanly.
         async def keepalive() -> None:
             while True:
                 await asyncio.sleep(30)
@@ -62,8 +54,6 @@ async def websocket_endpoint(
 
         async def reader() -> None:
             while True:
-                # We don't actually process client messages, but we read them
-                # so the socket stays alive and we detect disconnects promptly.
                 await websocket.receive_text()
 
         keepalive_task = asyncio.create_task(keepalive())
@@ -77,7 +67,7 @@ async def websocket_endpoint(
             task.cancel()
     except WebSocketDisconnect:
         pass
-    except Exception:  # noqa: BLE001
+    except Exception:
         log.exception("ws.error", org_id=str(organization_id))
     finally:
         await manager.disconnect(websocket, organization_id)

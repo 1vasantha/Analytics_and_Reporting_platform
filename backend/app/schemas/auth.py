@@ -1,4 +1,5 @@
-"""Authentication and user-management request/response schemas."""
+# Authentication and user-management request/response schemas.
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -10,7 +11,7 @@ from app.core.config import settings
 from app.models.enums import UserRole
 from app.schemas.common import ORMModel
 
-
+# Registration
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
@@ -28,23 +29,23 @@ class RegisterRequest(BaseModel):
             raise ValueError("Password must contain at least one letter")
         return v
 
-
+# Login
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-
+# Token
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    expires_in: int  # seconds
+    expires_in: int
 
-
+# Refresh Token
 class RefreshRequest(BaseModel):
     refresh_token: str
 
-
+# User Response
 class UserResponse(ORMModel):
     id: UUID
     email: EmailStr
@@ -55,35 +56,32 @@ class UserResponse(ORMModel):
     is_verified: bool
     created_at: datetime
 
-
+# Organization Response
 class OrganizationResponse(ORMModel):
     id: UUID
     name: str
     slug: str
     created_at: datetime
 
-
+# Returned by /register and /login — token + user + org in one round-trip.
 class AuthResponse(BaseModel):
-    """Returned by /register and /login — token + user + org in one round-trip."""
-
     model_config = ConfigDict(from_attributes=True)
-
     tokens: TokenResponse
     user: UserResponse
     organization: OrganizationResponse
 
-
+# Invite user
 class InviteRequest(BaseModel):
     email: EmailStr
     role: UserRole = UserRole.VIEWER
 
-
+# Accept User into Organization
 class AcceptInviteRequest(BaseModel):
     token: str
     password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=1, max_length=255)
 
-
+# Change Password
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=128)

@@ -1,11 +1,5 @@
-"""Alert service.
+# Alert service- CRUD for alert definitions, Evaluation: scheduled, evaluates the alert's MetricQuery against its threshold, notifications
 
-Two responsibilities:
-  1. CRUD for alert definitions.
-  2. Evaluation: invoked on a schedule, evaluates the alert's MetricQuery
-     against its threshold, and fires notifications if breached (respecting
-     cooldown).
-"""
 from __future__ import annotations
 
 import uuid
@@ -24,7 +18,6 @@ from app.services.metric_service import MetricService
 
 log = get_logger(__name__)
 
-
 _OPERATOR_FN = {
     AlertOperator.GT: lambda a, b: a > b,
     AlertOperator.GTE: lambda a, b: a >= b,
@@ -34,12 +27,10 @@ _OPERATOR_FN = {
     AlertOperator.NEQ: lambda a, b: a != b,
 }
 
-
+# CRUD- Alert Service
 class AlertService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
-
-    # ---------- CRUD -----------------------------------------------------
 
     async def list_alerts(self, organization_id: uuid.UUID) -> list[Alert]:
         result = await self.db.execute(

@@ -1,4 +1,5 @@
-"""Tests for the auth endpoints."""
+# Tests for the auth endpoints.
+
 from __future__ import annotations
 
 import pytest

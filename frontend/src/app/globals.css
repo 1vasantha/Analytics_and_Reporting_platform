@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --ink: #0a0a0a;
+  --muted: #7a766e;
+  --line: rgba(10, 10, 10, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+/* Numbers and metrics should be tabular */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* Subtle grid background for atmosphere */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(10, 10, 10, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 10, 10, 0.025) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+/* Editorial-feel divider */
+.divider-rule {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(10, 10, 10, 0.12) 20%,
+    rgba(10, 10, 10, 0.12) 80%,
+    transparent
+  );
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(10, 10, 10, 0.12);
+  border-radius: 5px;
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(10, 10, 10, 0.24);
+}
+
+/* Form inputs — consistent base styling */
+.input-base {
+  @apply w-full px-3 py-2 bg-white border border-ink-200 rounded text-sm
+         placeholder:text-ink-400
+         focus:outline-none focus:border-ink-900 focus:ring-2 focus:ring-ink-900/5
+         transition-all;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded
+         bg-ink-900 text-white text-sm font-medium tracking-tight
+         hover:bg-ink-800 active:scale-[0.98]
+         disabled:opacity-50 disabled:cursor-not-allowed
+         transition-all;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded
+         bg-white border border-ink-200 text-ink-900 text-sm font-medium tracking-tight
+         hover:bg-ink-50 hover:border-ink-300 active:scale-[0.98]
+         disabled:opacity-50 disabled:cursor-not-allowed
+         transition-all;
+}
+
+.btn-accent {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded
+         bg-accent text-white text-sm font-medium tracking-tight
+         hover:bg-accent-600 active:scale-[0.98]
+         transition-all;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded
+         text-ink-600 text-sm
+         hover:bg-ink-100 hover:text-ink-900
+         transition-all;
+}
+
+.card {
+  @apply bg-white rounded-lg shadow-card;
+}
+
+.kbd {
+  @apply px-1.5 py-0.5 text-[11px] font-mono rounded bg-ink-100 text-ink-600 border border-ink-200;
+}
+
+/* Recharts overrides for our aesthetic */
+.recharts-cartesian-grid line {
+  stroke: rgba(10, 10, 10, 0.05);
+}
+
+.recharts-text {
+  fill: #7a766e;
+  font-family: 'Geist', sans-serif;
+  font-size: 11px;
+}
+
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}

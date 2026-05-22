@@ -1,8 +1,5 @@
-"""API Key model for programmatic access (data ingestion endpoints).
+# API Key model for programmatic access (data ingestion endpoints).
 
-We store only the SHA256 hash of the secret part. The prefix (first 8 chars)
-is stored in plaintext for identification in dashboards and logs.
-"""
 from __future__ import annotations
 
 import hashlib
@@ -19,10 +16,8 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.organization import Organization
 
-
+# Long-lived API key for ingestion endpoints.
 class ApiKey(UUIDMixin, TimestampMixin, Base):
-    """Long-lived API key for ingestion endpoints."""
-
     __tablename__ = "api_keys"
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -40,14 +35,9 @@ class ApiKey(UUIDMixin, TimestampMixin, Base):
 
     organization: Mapped["Organization"] = relationship(back_populates="api_keys")
 
+    # Generate a new API key- (full_key, prefix, hashed)
     @staticmethod
     def generate() -> tuple[str, str, str]:
-        """Generate a new API key.
-
-        Returns:
-            (full_key, prefix, hashed) — `full_key` is shown to the user ONCE.
-        """
-        # Format: ak_<prefix>_<secret>  (e.g. ak_a3f9b7d2_<32-byte-base64>)
         random_part = secrets.token_urlsafe(32)
         prefix = secrets.token_hex(4)  # 8 hex chars
         full = f"ak_{prefix}_{random_part}"

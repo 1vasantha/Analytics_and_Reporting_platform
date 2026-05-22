@@ -1,8 +1,5 @@
-"""Pytest fixtures for the test suite.
+# Pytest fixtures for the test suite.
 
-We use an in-memory pattern: each test gets a transaction that's rolled back
-at the end. This keeps tests isolated without a teardown step.
-"""
 from __future__ import annotations
 
 import asyncio
@@ -18,18 +15,16 @@ from app.db.session import get_db
 from app.main import create_app
 from app.models import Base
 
-
+# Session-scoped event loop so the engine is shared across tests
 @pytest.fixture(scope="session")
 def event_loop():
-    """Session-scoped event loop so the engine is shared across tests."""
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
 
-
+# A separate engine pointing at a test database
 @pytest_asyncio.fixture(scope="session")
 async def test_engine():
-    """A separate engine pointing at a test database."""
     url = settings.DATABASE_URL.replace(
         f"/{settings.POSTGRES_DB}", f"/{settings.POSTGRES_DB}_test"
     )
@@ -44,10 +39,9 @@ async def test_engine():
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
 
-
+# Per-test session — wraps each test in a transaction and rolls back
 @pytest_asyncio.fixture
 async def db(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Per-test session — wraps each test in a transaction and rolls back."""
     connection = await test_engine.connect()
     transaction = await connection.begin()
     Session = async_sessionmaker(bind=connection, expire_on_commit=False)
@@ -58,10 +52,9 @@ async def db(test_engine) -> AsyncGenerator[AsyncSession, None]:
     await transaction.rollback()
     await connection.close()
 
-
+# HTTP client with DB dependency overridden to the test session
 @pytest_asyncio.fixture
 async def client(db) -> AsyncGenerator[AsyncClient, None]:
-    """HTTP client with DB dependency overridden to the test session."""
     app = create_app()
 
     async def _get_db_override():

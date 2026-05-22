@@ -1,4 +1,5 @@
-"""Common Pydantic schemas used across endpoints."""
+# Common Pydantic schemas used across endpoints.
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -9,19 +10,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 T = TypeVar("T")
 
-
+# Base for schemas mapped from SQLAlchemy ORM objects.
 class ORMModel(BaseModel):
-    """Base for schemas mapped from SQLAlchemy ORM objects."""
-
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-
+# Timestamp
 class TimestampedModel(ORMModel):
     id: UUID
     created_at: datetime
     updated_at: datetime
 
-
+# Pagination 
 class PaginationParams(BaseModel):
     page: int = Field(default=1, ge=1, le=10_000)
     page_size: int = Field(default=20, ge=1, le=200)
@@ -34,7 +33,7 @@ class PaginationParams(BaseModel):
     def limit(self) -> int:
         return self.page_size
 
-
+# Page Items
 class Page(BaseModel, Generic[T]):
     items: list[T]
     total: int
@@ -53,14 +52,14 @@ class Page(BaseModel, Generic[T]):
             pages=pages,
         )
 
-
+# Health Check Model
 class HealthCheck(BaseModel):
     status: str
     version: str
     database: bool
     redis: bool
 
-
+# Error Response model
 class ErrorResponse(BaseModel):
     error_code: str
     message: str

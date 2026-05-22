@@ -1,14 +1,7 @@
-"""Security primitives: password hashing and JWT handling.
+# Security primitives: password hashing and JWT handling.
+# JWT tokens- sub:user id, org: active organization id (for tenant isolation), role: user role in the org, type: "access" | "refresh", exp/iat: standard JWT claims
+# Refresh tokens are stored in Redis with a JTI so they can be revoked.
 
-JWT tokens carry:
-  - sub: user id
-  - org: active organization id (for tenant isolation)
-  - role: user's role in the org
-  - type: "access" | "refresh"
-  - exp/iat: standard JWT claims
-
-Refresh tokens are stored in Redis with a JTI so they can be revoked.
-"""
 from __future__ import annotations
 
 import uuid
@@ -26,33 +19,28 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__round
 
 TokenType = Literal["access", "refresh"]
 
-
+# Decoded JWT payload
 class TokenPayload(BaseModel):
-    """Decoded JWT payload."""
-
-    sub: str  # user_id (UUID string)
-    org: str | None = None  # organization_id (UUID string)
+    sub: str 
+    org: str | None = None 
     role: str | None = None
     type: TokenType
     jti: str
     exp: int
     iat: int
 
-
+# Hash a password using bcrypt
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
     return _pwd_context.hash(password)
 
-
+# Verify a plaintext password against a bcrypt hash.
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plaintext password against a bcrypt hash."""
     try:
         return _pwd_context.verify(plain, hashed)
     except ValueError:
-        # malformed hash
         return False
 
-
+# Create a signed JWT
 def _create_token(
     *,
     subject: str,
@@ -60,11 +48,6 @@ def _create_token(
     expires_delta: timedelta,
     extra_claims: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
-    """Create a signed JWT.
-
-    Returns:
-        Tuple of (encoded_token, jti). The jti can be persisted for revocation.
-    """
     now = datetime.now(UTC)
     jti = str(uuid.uuid4())
     payload: dict[str, Any] = {
@@ -80,7 +63,7 @@ def _create_token(
     encoded = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded, jti
 
-
+# Function call to create a token
 def create_access_token(
     user_id: str,
     *,
@@ -94,7 +77,7 @@ def create_access_token(
         extra_claims={"org": org_id, "role": role},
     )
 
-
+# reate refresh token
 def create_refresh_token(user_id: str) -> tuple[str, str]:
     return _create_token(
         subject=user_id,
@@ -102,13 +85,8 @@ def create_refresh_token(user_id: str) -> tuple[str, str]:
         expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     )
 
-
+# Decode and validate a JWT
 def decode_token(token: str) -> TokenPayload:
-    """Decode and validate a JWT.
-
-    Raises:
-        JWTError: If the token is invalid, expired, or malformed.
-    """
     try:
         raw = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return TokenPayload(**raw)

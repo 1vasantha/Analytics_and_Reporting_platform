@@ -1,7 +1,5 @@
-"""SQLAlchemy declarative base and common mixins.
+# SQLAlchemy declarative base and common mixins.- SQLAlchemy 2.0 typed Mapped[] annotations throughout.
 
-Uses SQLAlchemy 2.0 typed Mapped[] annotations throughout.
-"""
 from __future__ import annotations
 
 import uuid
@@ -21,20 +19,16 @@ NAMING_CONVENTION = {
     "pk": "pk_%(table_name)s",
 }
 
-
+# Declarative base for all ORM models.
 class Base(DeclarativeBase):
-    """Declarative base for all ORM models."""
-
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
-    # Map common Python types to PostgreSQL types
     type_annotation_map: dict[type, Any] = {
         uuid.UUID: PG_UUID(as_uuid=True),
     }
 
     @declared_attr.directive
-    def __tablename__(cls) -> str:  # noqa: N805
-        # CamelCase -> snake_case_plural
+    def __tablename__(cls) -> str:
         name = cls.__name__
         result = [name[0].lower()]
         for char in name[1:]:
@@ -45,20 +39,16 @@ class Base(DeclarativeBase):
                 result.append(char)
         return "".join(result) + "s"
 
-
+# Adds a primary-key `id` column (UUID v4)
 class UUIDMixin:
-    """Adds a primary-key `id` column (UUID v4)."""
-
     id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
-
+# Adds `created_at` and `updated_at` columns managed by the DB.
 class TimestampMixin:
-    """Adds `created_at` and `updated_at` columns managed by the DB."""
-
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

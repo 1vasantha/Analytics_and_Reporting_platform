@@ -1,15 +1,5 @@
-"""Seed the database with demo data.
+# Seed the database with demo data.
 
-Run:
-    python -m scripts.seed
-
-Creates:
-  * 1 organization (Acme Analytics)
-  * 1 owner user (demo@example.com / demopass123)
-  * 7 days of realistic event data (~5000 events)
-  * 2 dashboards with 6 widgets total
-  * 2 alerts (signup volume, error rate)
-"""
 from __future__ import annotations
 
 import asyncio
@@ -37,8 +27,7 @@ from app.models.organization import Organization
 from app.models.user import User
 
 DEMO_EMAIL = "demo@example.com"
-DEMO_PASSWORD = "demopass123"  # noqa: S105
-
+DEMO_PASSWORD = "demopass123"
 
 async def seed() -> None:
     async with AsyncSessionLocal() as db:
@@ -48,8 +37,8 @@ async def seed() -> None:
             print(f"Organization: {existing.organization_id}")
             return
 
-        # ---- Org + user --------------------------------------------------
-        org = Organization(name="Acme Analytics", slug="acme")
+        # Org + user
+        org = Organization(name="Analytics Global", slug="acme")
         user = User(
             email=DEMO_EMAIL,
             full_name="Demo User",
@@ -67,16 +56,14 @@ async def seed() -> None:
         print(f"Created org: {org.id} ({org.slug})")
         print(f"Created user: {user.email} / {DEMO_PASSWORD}")
 
-        # ---- Events ------------------------------------------------------
+        # Events
         events_to_create: list[Event] = []
         now = datetime.now(UTC)
         countries = ["US", "GB", "DE", "FR", "JP", "BR", "IN", "CA"]
         sources = ["web", "ios", "android"]
 
-        # 7 days of activity, with daily/hourly seasonality
         for day_offset in range(7):
             day = now - timedelta(days=day_offset)
-            # ~700 events per day, spread across hours with peaks at 10am and 8pm
             for _ in range(700):
                 hour_weights = [
                     0.5, 0.3, 0.2, 0.1, 0.1, 0.2, 0.5, 1.0,
@@ -87,7 +74,6 @@ async def seed() -> None:
                 minute = random.randint(0, 59)
                 ts = day.replace(hour=hour, minute=minute, second=random.randint(0, 59))
 
-                # Roll a random event type
                 roll = random.random()
                 if roll < 0.40:
                     name = "pageview"
@@ -128,7 +114,7 @@ async def seed() -> None:
         await db.commit()
         print(f"Created {len(events_to_create)} events")
 
-        # ---- Dashboard 1: Overview --------------------------------------
+        # Dashboard 1: Overview
         overview = Dashboard(
             organization_id=org.id,
             created_by_id=user.id,
@@ -237,7 +223,7 @@ async def seed() -> None:
         )
         print(f"Created dashboard: {overview.name}")
 
-        # ---- Dashboard 2: Revenue ---------------------------------------
+        # Dashboard 2: Revenue
         revenue = Dashboard(
             organization_id=org.id,
             created_by_id=user.id,
@@ -290,7 +276,7 @@ async def seed() -> None:
         await db.commit()
         print(f"Created dashboard: {revenue.name}")
 
-        # ---- Alerts -----------------------------------------------------
+        # Alerts
         db.add(
             Alert(
                 organization_id=org.id,
@@ -344,7 +330,6 @@ async def seed() -> None:
 
         print("\n✅ Seed complete!")
         print(f"   Login: {DEMO_EMAIL} / {DEMO_PASSWORD}")
-
 
 if __name__ == "__main__":
     asyncio.run(seed())

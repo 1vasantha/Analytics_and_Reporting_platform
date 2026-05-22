@@ -1,8 +1,5 @@
-"""Structured logging configuration using structlog.
+# Structured configuration- structlog. Development- human-readable output, Production- JSON for ingestion by log aggregators.
 
-In development, logs are rendered as human-readable colored output.
-In production, logs are emitted as JSON for ingestion by log aggregators.
-"""
 from __future__ import annotations
 
 import logging
@@ -14,17 +11,13 @@ from structlog.types import EventDict, Processor
 
 from app.core.config import settings
 
-
+# color message
 def _drop_color_message_key(_: Any, __: str, event_dict: EventDict) -> EventDict:
     event_dict.pop("color_message", None)
     return event_dict
 
-
+# Configure structlog and stdlib logging - once at application startup
 def configure_logging() -> None:
-    """Configure structlog and stdlib logging.
-
-    Should be called once at application startup, before any loggers are created.
-    """
     log_level = getattr(logging, settings.LOG_LEVEL)
 
     shared_processors: list[Processor] = [
@@ -51,7 +44,6 @@ def configure_logging() -> None:
         cache_logger_on_first_use=True,
     )
 
-    # Reconfigure stdlib root logger so uvicorn/sqlalchemy logs go through structlog
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(
         structlog.stdlib.ProcessorFormatter(
@@ -68,11 +60,9 @@ def configure_logging() -> None:
     root.addHandler(handler)
     root.setLevel(log_level)
 
-    # Quiet noisy libraries
     for name in ("uvicorn.access", "sqlalchemy.engine.Engine"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
-
+# Return a structlog logger bound to the given name.
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
-    """Return a structlog logger bound to the given name."""
     return structlog.get_logger(name)

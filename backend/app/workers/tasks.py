@@ -1,11 +1,4 @@
-"""Celery task definitions.
-
-Tasks are defined as thin sync wrappers that drive async business-logic
-coroutines via `asyncio.run`. Each task creates its own async DB session.
-
-This pattern keeps Celery (which is sync) compatible with our async stack
-without leaking event loops between tasks.
-"""
+# Celery task definitions.
 from __future__ import annotations
 
 import asyncio
@@ -34,23 +27,17 @@ from app.workers.celery_app import celery_app
 
 log = get_task_logger(__name__)
 
-
+# Run an async coroutine from within a sync Celery task
 def _run(coro: Any) -> Any:
-    """Run an async coroutine from within a sync Celery task."""
     return asyncio.run(coro)
 
 
-# =========================================================================
-# CSV ingestion
-# =========================================================================
-
-
+# CSV ingestion- Process an uploaded CSV file in chunks
 @celery_app.task(name="app.workers.tasks.process_csv_ingestion", bind=True, max_retries=2)
 def process_csv_ingestion(self, job_id: str, file_path: str) -> dict[str, int]:
-    """Process an uploaded CSV file in chunks."""
     return _run(_process_csv(job_id, file_path))
 
-
+# Process csv file
 async def _process_csv(job_id_str: str, file_path: str) -> dict[str, int]:
     job_id = uuid.UUID(job_id_str)
     async with AsyncSessionLocal() as db:
@@ -76,7 +63,6 @@ async def _process_csv(job_id_str: str, file_path: str) -> dict[str, int]:
                 for _, row in chunk_df.iterrows():
                     try:
                         row_dict = row.to_dict()
-                        # Conventional column names: event_name (required), value, user_id, etc.
                         if not row_dict.get("event_name"):
                             failed += 1
                             continue
@@ -107,7 +93,7 @@ async def _process_csv(job_id_str: str, file_path: str) -> dict[str, int]:
                                 occurred_at = pd.to_datetime(
                                     row_dict["occurred_at"], utc=True
                                 ).to_pydatetime()
-                            except Exception:  # noqa: BLE001
+                            except Exception:
                                 pass
 
                         events.append(
@@ -125,7 +111,7 @@ async def _process_csv(job_id_str: str, file_path: str) -> dict[str, int]:
                                 occurred_at=occurred_at,
                             )
                         )
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc: 
                         log.warning("csv.row_failed", error=str(exc))
                         failed += 1
 
@@ -143,14 +129,13 @@ async def _process_csv(job_id_str: str, file_path: str) -> dict[str, int]:
             await db.commit()
             log.info("csv.completed", job_id=str(job_id), processed=processed, failed=failed)
 
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc: 
             log.exception("csv.failed", job_id=str(job_id))
             job.status = IngestionJobStatus.FAILED.value
             job.error_message = str(exc)[:1024]
             job.completed_at = datetime.now(UTC)
             await db.commit()
         finally:
-            # Clean up the file
             try:
                 os.remove(file_path)
             except OSError:
@@ -158,18 +143,13 @@ async def _process_csv(job_id_str: str, file_path: str) -> dict[str, int]:
 
         return {"processed": processed, "failed": failed}
 
-
-# =========================================================================
 # Alert evaluation
-# =========================================================================
-
-
+# Evaluate every enabled alert. Called every minute by Beat
 @celery_app.task(name="app.workers.tasks.evaluate_all_alerts")
 def evaluate_all_alerts() -> dict[str, int]:
-    """Evaluate every enabled alert. Called every minute by Beat."""
     return _run(_evaluate_all_alerts())
 
-
+# Evaluate all alerts
 async def _evaluate_all_alerts() -> dict[str, int]:
     fired = 0
     checked = 0
@@ -183,7 +163,6 @@ async def _evaluate_all_alerts() -> dict[str, int]:
         for alert in alerts:
             checked += 1
             try:
-                # Skip if checked recently (avoid double-firing if Beat runs late)
                 if alert.last_checked_at:
                     since = (
                         datetime.now(UTC) - alert.last_checked_at.replace(tzinfo=UTC)
@@ -195,21 +174,19 @@ async def _evaluate_all_alerts() -> dict[str, int]:
                 if should_fire and observed is not None:
                     fired += 1
                     await _emit_alert_notifications(db, alert, observed)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.exception("alert.eval_failed", alert_id=str(alert.id))
 
     log.info("alerts.evaluated", checked=checked, fired=fired)
     return {"checked": checked, "fired": fired}
 
-
+# Emit notifications across all configured channels
 async def _emit_alert_notifications(
     db: Any, alert: Alert, observed_value: float
 ) -> None:
-    """Emit notifications across all configured channels."""
     service = AlertService(db)
     notif = await service.create_notification(alert, observed_value)
 
-    # Publish in-app via WebSocket
     from app.websockets.manager import manager as ws_manager
 
     await ws_manager.publish_to_org(
@@ -262,20 +239,15 @@ async def _emit_alert_notifications(
                             "triggered_at": datetime.now(UTC).isoformat(),
                         },
                     )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.warning("alert.webhook_failed", alert_id=str(alert.id))
-
 
 def _frontend_url() -> str:
     from app.core.config import settings
 
     return settings.FRONTEND_URL
 
-
-# =========================================================================
 # Scheduled reports
-# =========================================================================
-
 
 _FREQUENCY_DELTA = {
     ReportFrequency.DAILY: timedelta(days=1),
@@ -289,18 +261,15 @@ _FREQUENCY_LABEL = {
     ReportFrequency.MONTHLY: "Monthly",
 }
 
-
 @celery_app.task(name="app.workers.tasks.run_scheduled_reports")
 def run_scheduled_reports() -> dict[str, int]:
     return _run(_run_scheduled_reports())
-
 
 async def _run_scheduled_reports() -> dict[str, int]:
     now = datetime.now(UTC)
     sent = 0
 
     async with AsyncSessionLocal() as db:
-        # Eagerly load dashboards + widgets
         from sqlalchemy.orm import selectinload
         from app.models.dashboard import Dashboard
 
@@ -319,7 +288,6 @@ async def _run_scheduled_reports() -> dict[str, int]:
 
         for report in reports:
             try:
-                # Load dashboard with widgets
                 dashboard = await db.scalar(
                     select(Dashboard)
                     .options(selectinload(Dashboard.widgets))
@@ -362,23 +330,18 @@ async def _run_scheduled_reports() -> dict[str, int]:
                 report.next_run_at = now + _FREQUENCY_DELTA[freq]
                 await db.commit()
                 sent += 1
-            except Exception:  # noqa: BLE001
+            except Exception: 
                 log.exception("report.send_failed", report_id=str(report.id))
 
     log.info("reports.sent", count=sent)
     return {"sent": sent}
 
 
-# =========================================================================
 # Maintenance
-# =========================================================================
-
-
+# Delete read notifications older than 30 days
 @celery_app.task(name="app.workers.tasks.cleanup_old_notifications")
 def cleanup_old_notifications() -> dict[str, int]:
-    """Delete read notifications older than 30 days."""
     return _run(_cleanup_old_notifications())
-
 
 async def _cleanup_old_notifications() -> dict[str, int]:
     cutoff = datetime.now(UTC) - timedelta(days=30)

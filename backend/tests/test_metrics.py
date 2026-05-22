@@ -1,4 +1,5 @@
-"""Tests for the metric query engine."""
+# "Tests for the metric query engine.
+
 from __future__ import annotations
 
 import uuid
@@ -13,10 +14,9 @@ from app.models.user import User
 from app.schemas.dashboard import FilterCondition, MetricQuery, TimeRange
 from app.services.metric_service import MetricService
 
-
+# Create an org and 24 hourly events with mixed properties
 @pytest.fixture
 async def org_with_events(db):
-    """Create an org and 24 hourly events with mixed properties."""
     org = Organization(name="Test Org", slug=f"test-{uuid.uuid4().hex[:6]}")
     user = User(
         email=f"u{uuid.uuid4().hex[:6]}@t.com",
@@ -48,7 +48,6 @@ async def org_with_events(db):
     await db.flush()
     return org
 
-
 @pytest.mark.asyncio
 async def test_count_total(org_with_events, db):
     svc = MetricService(db)
@@ -61,9 +60,7 @@ async def test_count_total(org_with_events, db):
         ),
         use_cache=False,
     )
-    # 24 events, every 3rd is signup -> 8 signups
     assert result.total == 8
-
 
 @pytest.mark.asyncio
 async def test_sum_value(org_with_events, db):
@@ -78,9 +75,7 @@ async def test_sum_value(org_with_events, db):
         ),
         use_cache=False,
     )
-    # 8 signups * 10.0 = 80
     assert result.total == 80
-
 
 @pytest.mark.asyncio
 async def test_hourly_granularity(org_with_events, db):
@@ -97,7 +92,6 @@ async def test_hourly_granularity(org_with_events, db):
     assert len(result.points) > 0
     assert result.total > 0
 
-
 @pytest.mark.asyncio
 async def test_group_by_source(org_with_events, db):
     svc = MetricService(db)
@@ -113,7 +107,6 @@ async def test_group_by_source(org_with_events, db):
     groups = {p.group for p in result.points}
     assert groups == {"web", "ios"}
 
-
 @pytest.mark.asyncio
 async def test_filter_eq(org_with_events, db):
     svc = MetricService(db)
@@ -126,8 +119,7 @@ async def test_filter_eq(org_with_events, db):
         ),
         use_cache=False,
     )
-    assert result.total == 12  # half of 24
-
+    assert result.total == 12 
 
 @pytest.mark.asyncio
 async def test_filter_property(org_with_events, db):
@@ -142,7 +134,6 @@ async def test_filter_property(org_with_events, db):
         use_cache=False,
     )
     assert result.total == 12
-
 
 @pytest.mark.asyncio
 async def test_org_isolation(org_with_events, db):

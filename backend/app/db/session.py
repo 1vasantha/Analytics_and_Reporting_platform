@@ -1,10 +1,5 @@
-"""Async database engine and session management.
+# Async database engine and session management that provides engine, AsyncSessionLocal,get_db
 
-Provides:
-- `engine`: module-level async engine (one per process)
-- `AsyncSessionLocal`: session factory
-- `get_db()`: FastAPI dependency that yields a session and ensures cleanup
-"""
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -27,10 +22,11 @@ engine = create_async_engine(
     pool_size=settings.DB_POOL_SIZE if not _is_test else 5,
     max_overflow=settings.DB_MAX_OVERFLOW if not _is_test else 0,
     pool_timeout=settings.DB_POOL_TIMEOUT,
-    pool_pre_ping=True,  # validates connections before use, handles stale conns
+    pool_pre_ping=True,
     poolclass=NullPool if _is_test else None,
 )
 
+# session creation per request
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
@@ -38,13 +34,8 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
-
+# dependency that provides a request-scoped database session and closed automatically when the request completes
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that provides a request-scoped database session.
-
-    The session is closed automatically when the request completes.
-    Exceptions trigger a rollback; commits are explicit in service code.
-    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
