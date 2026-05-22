@@ -58,9 +58,9 @@ services:
         fromService: { type: keyvalue, name: analytics-redis, property: port }
       # CORS — fill in your Vercel domain after deploy
       - key: BACKEND_CORS_ORIGINS
-        value: https://analytics-and-reporting-platform.vercel.app
+        value: https://analytics-backend-m7oh.onrender.com
       - key: FRONTEND_URL
-        value: analytics-and-reporting-platform-pj2km3jvw.vercel.app
+        value: https://analytics-and-reporting-platform-enc882qle.vercel.app
       # SMTP — leave Mailhog defaults out; configure a real provider below if needed
       - key: SMTP_HOST
         value: smtp.example.com
