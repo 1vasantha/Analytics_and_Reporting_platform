@@ -48,7 +48,11 @@ class IngestionService:
         await self.db.execute(stmt)
         await self.db.commit()
 
-        log.info("ingestion.batch", org_id=str(organization_id), count=len(rows))
+        log.info(
+            "ingestion.batch org_id=%s count=%s",
+            organization_id,
+            len(rows),
+        )
         await self._post_ingest(organization_id, count=len(rows))
         return len(rows)
 

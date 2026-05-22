@@ -75,7 +75,11 @@ class AuthService:
 
         await self.db.refresh(user)
         await self.db.refresh(org)
-        log.info("auth.registered", user_id=str(user.id), org_id=str(org.id))
+        log.info(
+            "auth.registered user_id=%s org_id=%s",
+            user.id,
+            org.id,
+        )
         return user, org
 
     async def _unique_slug(self, base: str) -> str:
@@ -100,15 +104,24 @@ class AuthService:
         )
 
         if not user or not valid_password:
-            log.info("auth.login.failed", email=payload.email)
+            log.info(
+                "auth.login.failed email=%s",
+                payload.email,
+            )
             raise InvalidCredentialsError()
 
         if not user.is_active:
-            log.info("auth.login.inactive", user_id=str(user.id))
+            log.info(
+                "auth.login.inactive user_id=%s",
+                user.id,
+            )
             raise InvalidCredentialsError("Account is disabled")
 
         tokens = await self._issue_tokens(user)
-        log.info("auth.login.success", user_id=str(user.id))
+        log.info(
+            "auth.login.success user_id=%s",
+            user.id,
+        )
         return user, tokens
 
     # Token issuing & refresh

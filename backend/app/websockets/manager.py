@@ -38,7 +38,10 @@ class ConnectionManager:
             self._connections[organization_id].discard(websocket)
             if not self._connections[organization_id]:
                 del self._connections[organization_id]
-        log.info("ws.disconnected", org_id=str(organization_id))
+        log.info(
+            "ws.disconnected org_id=%s",
+            organization_id,
+        )
 
     # Send a message to all connections for an organization (this process only)
     async def broadcast_to_org(

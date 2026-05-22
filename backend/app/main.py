@@ -24,7 +24,11 @@ from app.websockets.routes import router as ws_router
 async def lifespan(app: FastAPI):
     configure_logging()
     log = get_logger(__name__)
-    log.info("app.starting", env=settings.ENVIRONMENT, version=settings.VERSION)
+    log.info(
+        "app.starting env=%s version=%s",
+        settings.ENVIRONMENT,
+        settings.VERSION,
+    )
 
     await ws_manager.start_redis_listener()
 

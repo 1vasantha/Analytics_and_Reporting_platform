@@ -55,7 +55,11 @@ class EmailService:
                 password=settings.SMTP_PASSWORD,
                 use_tls=settings.SMTP_TLS,
             )
-            log.info("email.sent", to=recipients, subject=subject)
+            log.info(
+                "email.sent to=%s subject=%s",
+                recipients,
+                subject,
+            )
         except Exception:
             log.exception("email.send_failed", to=recipients, subject=subject)
 

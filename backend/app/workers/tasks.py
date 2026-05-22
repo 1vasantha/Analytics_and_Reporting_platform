@@ -127,8 +127,12 @@ async def _process_csv(job_id_str: str, file_path: str) -> dict[str, int]:
             job.total_rows = processed + failed
             job.completed_at = datetime.now(UTC)
             await db.commit()
-            log.info("csv.completed", job_id=str(job_id), processed=processed, failed=failed)
-
+            log.info(
+                "csv.completed job_id=%s processed=%s failed=%s",
+                job_id,
+                processed,
+                failed,
+            )
         except Exception as exc: 
             log.exception("csv.failed", job_id=str(job_id))
             job.status = IngestionJobStatus.FAILED.value
@@ -177,7 +181,11 @@ async def _evaluate_all_alerts() -> dict[str, int]:
             except Exception:
                 log.exception("alert.eval_failed", alert_id=str(alert.id))
 
-    log.info("alerts.evaluated", checked=checked, fired=fired)
+    log.info(
+        "alerts.evaluated checked=%s fired=%s",
+        checked,
+        fired,
+    )
     return {"checked": checked, "fired": fired}
 
 # Emit notifications across all configured channels
@@ -333,7 +341,10 @@ async def _run_scheduled_reports() -> dict[str, int]:
             except Exception: 
                 log.exception("report.send_failed", report_id=str(report.id))
 
-    log.info("reports.sent", count=sent)
+    log.info(
+        "reports.sent count=%s",
+        sent,
+    )
     return {"sent": sent}
 
 
@@ -354,5 +365,8 @@ async def _cleanup_old_notifications() -> dict[str, int]:
         )
         await db.commit()
         deleted = result.rowcount or 0
-    log.info("notifications.cleaned", deleted=deleted)
+    log.info(
+        "notifications.cleaned deleted=%s",
+        deleted,
+    )
     return {"deleted": deleted}
