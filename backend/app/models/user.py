@@ -31,7 +31,7 @@ class User(UUIDMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    organization: Mapped["Organization"] = relationship(back_populates="users")
+    organization: Mapped["Organization"] = relationship(back_populates="users", lazy="selectin")
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"

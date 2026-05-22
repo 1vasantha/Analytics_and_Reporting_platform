@@ -34,11 +34,11 @@ class Dashboard(UUIDMixin, TimestampMixin, Base):
 
     refresh_interval: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    organization: Mapped["Organization"] = relationship(back_populates="dashboards")
+    organization: Mapped["Organization"] = relationship(back_populates="dashboards", lazy="selectin")
     widgets: Mapped[list["Widget"]] = relationship(
         back_populates="dashboard",
         cascade="all, delete-orphan",
-        order_by="Widget.position",
+        order_by="Widget.position", lazy="selectin"
     )
 
 # A single chart on a dashboard- `query_config` is a JSON blob whose schema is validated by Pydantic
