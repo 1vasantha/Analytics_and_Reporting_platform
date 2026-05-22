@@ -1,32 +1,33 @@
-# render.yaml — single-click blueprint for Render
-# Place this at the repo root, then on Render: New → Blueprint → connect repo.
-
 databases:
   - name: analytics-postgres
-    plan: free          # 90-day expiry on free tier; upgrade to "starter" ($7/mo) for permanent
+    plan: free       
     region: oregon
-    postgresMajorVersion: "16"
-
+    postgresMajorVersion: 16
+    ipAllowList: []         
 services:
-  # ───── Redis ─────
+  # Redis
   - type: keyvalue
     name: analytics-redis
-    plan: free          # 25 MB
+    plan: free             
     region: oregon
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
 
-  # ───── Web (FastAPI) ─────
+  # ──────────────── Web (FastAPI) ────────────────
   - type: web
     name: analytics-backend
     runtime: python
     region: oregon
-    plan: free          # sleeps after 15 min idle
+    plan: free                # sleeps after 15 min; upgrade to "starter" ($7/mo) to keep awake
     rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -e .
-    # preDeploy runs migrations BEFORE traffic shifts to a new deploy
-    # preDeployCommand: alembic upgrade head
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    buildCommand: |
+      pip install --upgrade pip && pip install -e .
+    # `alembic upgrade head` runs as a release-phase command so migrations
+    # apply on every deploy before traffic shifts.
+    preDeployCommand: |
+      alembic upgrade head && python -m scripts.seed
+    startCommand: |
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -38,9 +39,8 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: SECRET_KEY
-        generateValue: true   # Render auto-generates a strong secret
-
-      # Database wiring — pulled from the managed Postgres above
+        generateValue: true   # Render generates a 32+ char secret on first deploy
+      # Database — pulled from the managed Postgres service above
       - key: POSTGRES_HOST
         fromDatabase: { name: analytics-postgres, property: host }
       - key: POSTGRES_PORT
@@ -51,42 +51,41 @@ services:
         fromDatabase: { name: analytics-postgres, property: password }
       - key: POSTGRES_DB
         fromDatabase: { name: analytics-postgres, property: database }
-
-      # Redis wiring — pulled from the managed Redis above
+      # Redis — pulled from the managed Redis service above
       - key: REDIS_HOST
         fromService: { type: keyvalue, name: analytics-redis, property: host }
       - key: REDIS_PORT
         fromService: { type: keyvalue, name: analytics-redis, property: port }
-
-      # CORS + Frontend URL — UPDATE these after Vercel deploy
+      # CORS — fill in your Vercel domain after deploy
       - key: BACKEND_CORS_ORIGINS
-        value: https://analytics-backend-m7oh.onrender.com
+        value: ["https://analytics-backend-m7oh.onrender.com"]
       - key: FRONTEND_URL
         value: analytics-and-reporting-platform-pj2km3jvw.vercel.app
-
-      # SMTP — set in Render dashboard after sign-up with an email provider
+      # SMTP — leave Mailhog defaults out; configure a real provider below if needed
       - key: SMTP_HOST
-        sync: false
+        value: smtp.example.com
       - key: SMTP_PORT
-        sync: false
+        value: "587"
       - key: SMTP_USER
-        sync: false
+        sync: false           # set manually in dashboard (sensitive)
       - key: SMTP_PASSWORD
         sync: false
       - key: SMTP_FROM_EMAIL
-        sync: false
+        value: noreply@yourdomain.com
       - key: SMTP_TLS
         value: "true"
 
-  # ───── Celery worker ─────
+  # ──────────────── Celery worker ────────────────
   - type: worker
     name: analytics-worker
     runtime: python
     region: oregon
-    plan: free          # workers never sleep on Render free tier
+    plan: free                # workers do NOT sleep on free tier
     rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -e .
-    startCommand: celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=2
+    buildCommand: |
+      pip install --upgrade pip && pip install -e .
+    startCommand: |
+      celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=2
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.10"
@@ -109,29 +108,31 @@ services:
       - key: REDIS_PORT
         fromService: { type: keyvalue, name: analytics-redis, property: port }
       - key: FRONTEND_URL
-        value: https://CHANGE-ME.vercel.app
+        value: https://YOUR-FRONTEND.vercel.app
       - key: SMTP_HOST
-        sync: false
+        value: smtp.example.com
       - key: SMTP_PORT
-        sync: false
+        value: "587"
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASSWORD
         sync: false
       - key: SMTP_FROM_EMAIL
-        sync: false
+        value: noreply@yourdomain.com
       - key: SMTP_TLS
         value: "true"
 
-  # ───── Celery beat ─────
+  # ──────────────── Celery beat (scheduler) ────────────────
   - type: worker
     name: analytics-beat
     runtime: python
     region: oregon
     plan: free
     rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -e .
-    startCommand: celery -A app.workers.celery_app beat --loglevel=INFO
+    buildCommand: |
+      pip install --upgrade pip && pip install -e .
+    startCommand: |
+      celery -A app.workers.celery_app beat --loglevel=INFO
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.10"
