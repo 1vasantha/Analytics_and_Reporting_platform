@@ -56,13 +56,12 @@ def create_app() -> FastAPI:
 
     # Cors
     app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining"],
-    )
+    CORSMiddleware,
+    allow_origins=["https://analytics-and-reporting-platform.vercel.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
     # Routers
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
