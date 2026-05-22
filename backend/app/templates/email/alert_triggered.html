@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Alert Triggered</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1f2937;">
+  <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 6px;">
+    <h2 style="margin: 0 0 8px 0; color: #92400e;">⚠️ Alert Triggered: {{ alert.name }}</h2>
+    {% if alert.description %}
+    <p style="margin: 0; color: #78350f;">{{ alert.description }}</p>
+    {% endif %}
+  </div>
+
+  <div style="margin: 24px 0;">
+    <h3 style="margin: 0 0 12px 0;">Details</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr><td style="padding: 8px 0; color: #6b7280;">Observed value</td><td style="padding: 8px 0; font-weight: 600;">{{ observed_value }}</td></tr>
+      <tr><td style="padding: 8px 0; color: #6b7280;">Threshold</td><td style="padding: 8px 0;">{{ alert.operator }} {{ alert.threshold }}</td></tr>
+      <tr><td style="padding: 8px 0; color: #6b7280;">Triggered at</td><td style="padding: 8px 0;">{{ triggered_at }}</td></tr>
+    </table>
+  </div>
+
+  <a href="{{ frontend_url }}/alerts/{{ alert.id }}"
+     style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">
+    View in dashboard
+  </a>
+
+  <p style="margin-top: 32px; color: #9ca3af; font-size: 14px;">
+    You're receiving this because you're subscribed to alerts in {{ organization_name }}.
+  </p>
+</body>
+</html>

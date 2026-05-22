@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>{{ dashboard.name }} — {{ frequency_label }} report</title></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; max-width: 700px; margin: 0 auto; padding: 24px; color: #1f2937;">
+  <h2 style="margin: 0 0 4px 0;">{{ dashboard.name }}</h2>
+  <p style="color: #6b7280; margin: 0 0 24px 0;">{{ frequency_label }} report · {{ generated_at }}</p>
+
+  {% for widget_data in widgets %}
+    <div style="margin: 24px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px;">
+      <h3 style="margin: 0 0 8px 0;">{{ widget_data.title }}</h3>
+      <p style="font-size: 28px; font-weight: 700; margin: 0; color: #2563eb;">
+        {{ "{:,.2f}".format(widget_data.total) }}
+      </p>
+      <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 14px;">
+        {{ widget_data.aggregation }} over {{ widget_data.row_count }} data points
+      </p>
+    </div>
+  {% endfor %}
+
+  <a href="{{ frontend_url }}/dashboards/{{ dashboard.id }}"
+     style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">
+    Open dashboard
+  </a>
+</body>
+</html>
