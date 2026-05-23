@@ -49,10 +49,7 @@ def create_app() -> FastAPI:
         openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
         lifespan=lifespan,
     )
-    origins = settings.BACKEND_CORS_ORIGINS
-
-    if isinstance(origins, str):
-        origins = origins.split(",")
+    origins = settings.cors_origins_list
 
     if not origins:
         origins = ["http://localhost:3000"]
