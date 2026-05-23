@@ -10,8 +10,8 @@ export default function LoginPage() {
   const login = useAuthStore((s) => s.login);
   const isLoading = useAuthStore((s) => s.isLoading);
 
-  const [email, setEmail] = useState('demo@example.com');
-  const [password, setPassword] = useState('demopass123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
@@ -82,9 +82,7 @@ export default function LoginPage() {
           </div>
         </form>
 
-        <div className="mt-6 text-center text-xs text-ink-400">
-          Demo: <span className="font-mono">demo@example.com</span> / <span className="font-mono">demopass123</span>
-        </div>
+        
       </div>
     </div>
   );

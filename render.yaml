@@ -1,0 +1,118 @@
+# render.yaml — Free-tier (web-only) blueprint for Analytics Platform
+# Runs FastAPI + Celery worker + Celery beat in a SINGLE web service via honcho.
+# This is the only configuration that fits 100% within Render's free tier.
+
+databases:
+  - name: analytics-postgres
+    plan: free
+    region: oregon
+    postgresMajorVersion: "16"
+    ipAllowList: []
+
+services:
+  - type: keyvalue
+    name: analytics-redis
+    plan: free
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+
+  - type: web
+    name: analytics-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -e . && pip install honcho
+    # honcho is a Python process manager (like foreman). It reads Procfile
+    # and runs every process in parallel, restarting any that die.
+    # alembic runs first, then honcho fires the three processes.
+    startCommand: alembic upgrade head && honcho start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.10"
+      # Tell honcho which file to read
+      - key: HONCHO_PROCFILE
+        value: Procfile
+
+      # ─── App ───
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: SECRET_KEY
+        generateValue: true
+
+      # ─── Database ───
+      - key: POSTGRES_HOST
+        fromDatabase: { name: analytics-postgres, property: host }
+      - key: POSTGRES_PORT
+        fromDatabase: { name: analytics-postgres, property: port }
+      - key: POSTGRES_USER
+        fromDatabase: { name: analytics-postgres, property: user }
+      - key: POSTGRES_PASSWORD
+        fromDatabase: { name: analytics-postgres, property: password }
+      - key: POSTGRES_DB
+        fromDatabase: { name: analytics-postgres, property: database }
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: DB_MAX_OVERFLOW
+        value: "5"
+      - key: DB_POOL_TIMEOUT
+        value: "30"
+      - key: DB_ECHO
+        value: "false"
+
+      # ─── Redis ───
+      - key: REDIS_HOST
+        fromService: { type: keyvalue, name: analytics-redis, property: host }
+      - key: REDIS_PORT
+        fromService: { type: keyvalue, name: analytics-redis, property: port }
+      - key: REDIS_DB
+        value: "0"
+
+      # ─── Rate limits ───
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "60"
+      - key: RATE_LIMIT_INGESTION_PER_MINUTE
+        value: "1000"
+      - key: RATE_LIMIT_AUTH_PER_MINUTE
+        value: "5"
+
+      # ─── CORS / Frontend ───
+      - key: BACKEND_CORS_ORIGINS
+        value: https://analytics-and-reporting-platform-grwoc7u8k.vercel.app, https://localhost:3000
+      - key: FRONTEND_URL
+        value:  https://analytics-and-reporting-platform-grwoc7u8k.vercel.app
+
+      # ─── SMTP (set in dashboard if you want emails) ───
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_TLS
+        value: "true"
+
+      # ─── Ingestion ───
+      - key: MAX_BATCH_SIZE
+        value: "1000"
+      - key: MAX_CSV_SIZE_MB
+        value: "25"
+      - key: INGESTION_BUFFER_SECONDS
+        value: "5"
+
+      # ─── Celery ───
+      - key: CELERY_TASK_TIME_LIMIT
+        value: "300"
+      - key: CELERY_TASK_SOFT_TIME_LIMIT
+        value: "240"

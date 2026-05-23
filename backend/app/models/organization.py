@@ -25,19 +25,19 @@ class Organization(UUIDMixin, TimestampMixin, Base):
 
     users: Mapped[list["User"]] = relationship(
         back_populates="organization",
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan", lazy="selectin"
     )
     api_keys: Mapped[list["ApiKey"]] = relationship(
         back_populates="organization",
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan", lazy="selectin"
     )
     dashboards: Mapped[list["Dashboard"]] = relationship(
         back_populates="organization",
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan", lazy="selectin"
     )
     events: Mapped[list["Event"]] = relationship(
         back_populates="organization",
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan", lazy="selectin"
     )
 
     def __repr__(self) -> str:

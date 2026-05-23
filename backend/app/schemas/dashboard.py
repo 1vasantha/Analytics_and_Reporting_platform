@@ -52,6 +52,7 @@ class TimeRange(BaseModel):
 
 # Declarative metric query
 class MetricQuery(BaseModel):
+    model_config = ConfigDict(extra='ignore')
     event_name: str | None = Field(default=None, max_length=128)
     source: str | None = Field(default=None, max_length=64)
 

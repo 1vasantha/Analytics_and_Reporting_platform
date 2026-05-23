@@ -11,8 +11,9 @@ import httpx
 import pandas as pd
 from celery.utils.log import get_task_logger
 from sqlalchemy import delete, select
-
-from app.db.session import AsyncSessionLocal
+from sqlalchemy.ext.asyncio import (
+    async_sessionmaker)
+# from app.db.session import AsyncSessionLocal
 from app.models.alert import Alert, Notification, ScheduledReport
 from app.models.enums import IngestionJobStatus, NotificationChannel, ReportFrequency
 from app.models.event import IngestionJob
@@ -29,8 +30,26 @@ log = get_task_logger(__name__)
 
 # Run an async coroutine from within a sync Celery task
 def _run(coro: Any) -> Any:
-    return asyncio.run(coro)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
 
+def _make_session() -> async_sessionmaker:
+    """Always create a fresh engine for Celery workers to avoid loop conflicts."""
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+    from app.core.config import settings
+
+    engine = create_async_engine(
+        str(settings.DATABASE_URL),
+        pool_size=1,
+        max_overflow=0,
+        pool_pre_ping=True,
+    )
+    return async_sessionmaker(engine, expire_on_commit=False)
 
 # CSV ingestion- Process an uploaded CSV file in chunks
 @celery_app.task(name="app.workers.tasks.process_csv_ingestion", bind=True, max_retries=2)
@@ -40,7 +59,7 @@ def process_csv_ingestion(self, job_id: str, file_path: str) -> dict[str, int]:
 # Process csv file
 async def _process_csv(job_id_str: str, file_path: str) -> dict[str, int]:
     job_id = uuid.UUID(job_id_str)
-    async with AsyncSessionLocal() as db:
+    async with _make_session()() as db:
         job = await db.get(IngestionJob, job_id)
         if not job:
             log.error("csv.job_not_found", job_id=str(job_id))
@@ -158,7 +177,7 @@ async def _evaluate_all_alerts() -> dict[str, int]:
     fired = 0
     checked = 0
 
-    async with AsyncSessionLocal() as db:
+    async with _make_session()() as db:
         alerts = (
             await db.execute(select(Alert).where(Alert.is_enabled.is_(True)))
         ).scalars().all()
@@ -277,7 +296,7 @@ async def _run_scheduled_reports() -> dict[str, int]:
     now = datetime.now(UTC)
     sent = 0
 
-    async with AsyncSessionLocal() as db:
+    async with _make_session()() as db:
         from sqlalchemy.orm import selectinload
         from app.models.dashboard import Dashboard
 
@@ -356,7 +375,7 @@ def cleanup_old_notifications() -> dict[str, int]:
 
 async def _cleanup_old_notifications() -> dict[str, int]:
     cutoff = datetime.now(UTC) - timedelta(days=30)
-    async with AsyncSessionLocal() as db:
+    async with _make_session()() as db:
         result = await db.execute(
             delete(Notification).where(
                 Notification.is_read.is_(True),

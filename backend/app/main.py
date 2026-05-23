@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.exceptions import AppException
 from app.core.logging import configure_logging, get_logger
 from app.db.redis import close_redis, get_redis
-from app.db.session import engine
+from app.db.session import get_engine
 from app.schemas.common import ErrorResponse, HealthCheck
 from app.websockets.manager import manager as ws_manager
 from app.websockets.routes import router as ws_router
@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
     log.info("app.shutting_down")
     await ws_manager.stop_redis_listener()
     await close_redis()
-    await engine.dispose()
+    await get_engine().dispose()
 
 # Application factory — keeps configuration declarative and testable.
 def create_app() -> FastAPI:
@@ -49,17 +49,19 @@ def create_app() -> FastAPI:
         openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
         lifespan=lifespan,
     )
+    origins = settings.cors_origins_list
 
-    # Cors
+    allowed_origin_regex = r"https://analytics-and-reporting-platform.*\.vercel\.app"
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
+        allow_origins=origins,
+        allow_origin_regex=allowed_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining"],
     )
-
+    
     # Rate limiting
     app.add_middleware(RateLimitMiddleware)
 
@@ -111,7 +113,7 @@ def create_app() -> FastAPI:
         redis_ok = False
 
         try:
-            async with engine.connect() as conn:
+            async with get_engine().connect() as conn:
                 await conn.execute(text("SELECT 1"))
                 db_ok = True
         except Exception:

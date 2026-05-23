@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from app.core.config import settings
 from app.core.exceptions import RateLimitError
@@ -30,8 +31,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         if not request.url.path.startswith("/api/"):
             return await call_next(request)
+        
         if request.method == "OPTIONS":
-            return await call_next(request)
+            return Response(status_code=200)
 
         key, limit = _key_for(request)
         window_seconds = 60

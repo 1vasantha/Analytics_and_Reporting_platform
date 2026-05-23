@@ -33,7 +33,7 @@ class ApiKey(UUIDMixin, TimestampMixin, Base):
     revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
 
-    organization: Mapped["Organization"] = relationship(back_populates="api_keys")
+    organization: Mapped["Organization"] = relationship(back_populates="api_keys", lazy="selectin")
 
     # Generate a new API key- (full_key, prefix, hashed)
     @staticmethod

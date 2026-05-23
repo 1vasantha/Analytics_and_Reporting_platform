@@ -39,6 +39,7 @@ log = get_logger(__name__)
 # Anything else must go through the `properties` JSONB field.
 _TOP_LEVEL_COLUMNS: dict[str, Column] = {
     "event_name": Event.event_name,
+    "name": Event.event_name,
     "source": Event.source,
     "user_id": Event.user_id,
     "session_id": Event.session_id,
