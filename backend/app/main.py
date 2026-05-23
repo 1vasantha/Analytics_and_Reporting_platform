@@ -49,12 +49,17 @@ def create_app() -> FastAPI:
         openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
         lifespan=lifespan,
     )
+    origins = settings.cors_origins_list
+
+    if not origins:
+        origins = ["http://localhost:3000"]
+
     allowed_origin_regex = r"https://analytics-and-reporting-platform.*\.vercel\.app"
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins,  # your env list for production
-        allow_origin_regex=allowed_origin_regex,  # covers all preview URLs
+        allow_origins=origins,
+        allow_origin_regex=allowed_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
