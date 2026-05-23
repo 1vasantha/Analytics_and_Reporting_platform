@@ -51,6 +51,7 @@ async def create_dashboard(
         raise PermissionDeniedError("You cannot create dashboards")
     service = DashboardService(db)
     dashboard = await service.create_dashboard(user.organization_id, user.id, payload)
+    await db.refresh(dashboard)
     return DashboardResponse.model_validate(dashboard)
 
 
@@ -62,6 +63,7 @@ async def get_dashboard(
 ) -> DashboardResponse:
     service = DashboardService(db)
     dashboard = await service.get_dashboard(dashboard_id, user.organization_id)
+    await db.refresh(dashboard)
     return DashboardResponse.model_validate(dashboard)
 
 
@@ -78,6 +80,7 @@ async def update_dashboard(
     dashboard = await service.update_dashboard(
         dashboard_id, user.organization_id, payload
     )
+    await db.refresh(dashboard)
     return DashboardResponse.model_validate(dashboard)
 
 
