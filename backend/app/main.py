@@ -49,15 +49,22 @@ def create_app() -> FastAPI:
         openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
         lifespan=lifespan,
     )
+    origins = settings.BACKEND_CORS_ORIGINS
 
-    # Cors
+    if isinstance(origins, str):
+        origins = origins.split(",")
+
+    if not origins:
+        origins = ["http://localhost:3000"]
+
+    # CORS
     app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://analytics-and-reporting-platform.vercel.app"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+        CORSMiddleware,
+        allow_origins=[origin.strip() for origin in origins],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     
     # Rate limiting
     app.add_middleware(RateLimitMiddleware)

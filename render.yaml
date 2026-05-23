@@ -85,9 +85,9 @@ services:
 
       # ─── CORS / Frontend ───
       - key: BACKEND_CORS_ORIGINS
-        value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
+        value: https://analytics-and-reporting-platform-grwoc7u8k.vercel.app, https://localhost:3000
       - key: FRONTEND_URL
-        value: https://CHANGE-ME-TO-YOUR-VERCEL-URL.vercel.app
+        value:  https://analytics-and-reporting-platform-grwoc7u8k.vercel.app
 
       # ─── SMTP (set in dashboard if you want emails) ───
       - key: SMTP_HOST
