@@ -51,9 +51,6 @@ def create_app() -> FastAPI:
     )
     origins = settings.cors_origins_list
 
-    if not origins:
-        origins = ["http://localhost:3000"]
-
     allowed_origin_regex = r"https://analytics-and-reporting-platform.*\.vercel\.app"
 
     app.add_middleware(
